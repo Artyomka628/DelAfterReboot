@@ -13,10 +13,18 @@
     <MajorUpgrade DowngradeErrorMessage="A newer version is already installed."/>
     <Media Id="1" Cabinet="product.cab" EmbedCab="yes"/>
 
+    <UIRef Id="WixUI_InstallDir"/>
+    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER"/>
+
+    <WixVariable Id="WixUILicenseRtf" Value="D:\A\DELAFTERREBOOT\DELAFTERREBOOT\INSTALLER\license.rtf"/>
+    <WixVariable Id="WixUIDialogBmp" Value="D:\A\DELAFTERREBOOT\DELAFTERREBOOT\INSTALLER\banner.bmp" />
+    <WixVariable Id="WixUIBannerBmp" Value="D:\A\DELAFTERREBOOT\DELAFTERREBOOT\INSTALLER\banner.bmp" />
+
     <Directory Id="TARGETDIR" Name="SourceDir">
       <Directory Id="ProgramFilesFolder">
         <Directory Id="INSTALLFOLDER" Name="DelAfterReboot">
 
+          
           <Component Id="DelExe" Guid="3f2504e0-4f89-11d3-9a0c-0305e82c3301">
             <File Source="D:\A\DELAFTERREBOOT\DELAFTERREBOOT\INSTALLER\del.exe" KeyPath="yes"/>
           </Component>

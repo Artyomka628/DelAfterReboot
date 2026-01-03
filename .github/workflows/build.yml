@@ -60,42 +60,8 @@ jobs:
       run: |
         Set-Location $env:GITHUB_WORKSPACE
         $delPath = Join-Path $env:GITHUB_WORKSPACE "installer\del.exe"
-        candle installer\Product.wxs -dDelExePath="$env:GITHUB_WORKSPACE/build/del.exe" -out installer\Product.wixobj
-        light installer\Product.wixobj -o installer\DelAfterReboot.msi -b installer
-        
-    - name: Build MSI with logs and inspect content
-      if: always()
-      shell: pwsh
-      run: |
-        Set-Location $env:GITHUB_WORKSPACE
-
-        Write-Host "=== Проверим содержимое папки installer ==="
-        Get-ChildItem -Path "$env:GITHUB_WORKSPACE\installer" -Recurse | ForEach-Object { $_.FullName }
-
-        # 1) candle с логом
-        Write-Host "Running candle..."
-        & candle installer\Product.wxs -out build\Product.wixobj *> build\candle.log 2>&1
-        Write-Host "candle exit $LASTEXITCODE"
-
-        # 2) light с base dir = installer и логом
-        Write-Host "Running light..."
-        & light build\Product.wixobj -o build\DelAfterReboot.msi -b installer *> build\light.log 2>&1
-        Write-Host "light exit $LASTEXITCODE"
-
-        # 3) покажем размер полученного MSI
-        if (Test-Path "build\DelAfterReboot.msi") {
-          $size = (Get-Item "build\DelAfterReboot.msi").Length
-          Write-Host "Built MSI size: $size bytes"
-        } else {
-          Write-Host "MSI не найден"
-        }
-
-        # 4) Установим 7zip и посмотрим содержимое MSI (список файлов внутри)
-        choco install 7zip -y
-        & "C:\Program Files\7-Zip\7z.exe" l build\DelAfterReboot.msi > build\msi-7z-list.txt
-
-        Write-Host "=== Содержимое build (для отладки) ==="
-        Get-ChildItem -Path "$env:GITHUB_WORKSPACE\build" -Recurse | ForEach-Object { "$($_.FullName) `t $($_.Length) bytes" }
+        candle installer\Product.wxs -ext WixUIExtension -loc installer\en-us.wxl -loc installer\ru-ru.wxl -dDelExePath="$env:GITHUB_WORKSPACE/build/del.exe" -out installer\
+        light installer\Product.wixobj -ext WixUIExtension -o installer\DelAfterReboot.msi -b installer
       
     - name: Create GitHub Release
       id: create_release
@@ -114,32 +80,6 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.PUBLISH_TOKEN }}
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: build\DelAfterReboot.msi
+        asset_path: installer\DelAfterReboot.msi
         asset_name: DelAfterReboot.msi
         asset_content_type: application/x-msi
-
-    - name: Debug on failure
-      if: failure()
-      shell: pwsh
-      run: |
-        $outFile = "$env:GITHUB_WORKSPACE\workspace-tree-2.txt"
-        Write-Host "Workflow завершился с ошибкой. Сохраняем дерево файлов в $outFile"
-
-        # Используем встроенный tree
-        cmd /c "tree /f `"$env:GITHUB_WORKSPACE`" > `"$outFile`""
-
-        Write-Host "Содержимое installer для наглядности:"
-        cmd /c "tree /f `"$env:GITHUB_WORKSPACE\installer`""
-
-    - name: Upload debug artifacts
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: msi-debug-artifacts
-        path: |
-          build\DelAfterReboot.msi
-          build\candle.log
-          build\light.log
-          build\msi-7z-list.txt
-          workspace-tree.txt
-          workspace-tree-2.txt
