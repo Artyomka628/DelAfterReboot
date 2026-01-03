@@ -2,6 +2,15 @@ name: Build MSI and Release (x86)
 
 on:
   workflow_dispatch:
+    inputs:
+      release:
+        description: "Publish to GitHub Release?"
+        required: true
+        default: "no"
+        type: choice
+        options:
+          - "yes"
+          - "no"
   push:
 
 jobs:
@@ -11,13 +20,31 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Setup MSYS2
+    - name: Restore MSYS2 cache
+      id: msys2-cache
+      uses: actions/cache@v3
+      with:
+        path: |
+          C:\msys64\var\cache\pacman\pkg
+          C:\msys64\mingw32
+        key: msys2-${{ runner.os }}-gcc-${{ hashFiles('release.json', 'installer/**') }}
+
+    - name: Setup MSYS2 and install packages
       uses: msys2/setup-msys2@v2
       with:
         msystem: MINGW32
         update: true
         install: >
           mingw-w64-i686-gcc
+
+    - name: Save MSYS2 cache (only when cache missed)
+      if: steps.msys2-cache.outputs.cache-hit != 'true'
+      uses: actions/cache@v3
+      with:
+        path: |
+          C:\msys64\var\cache\pacman\pkg
+          C:\msys64\mingw32
+        key: msys2-${{ runner.os }}-gcc-${{ hashFiles('release.json', 'installer/**') }}
 
     - name: Build del.exe
       shell: msys2 {0}
@@ -31,55 +58,74 @@ jobs:
 
     - name: Read release info
       id: releaseinfo
+      shell: pwsh
       run: |
         $json = Get-Content release.json | ConvertFrom-Json
-        Write-Host "VERSION=$($json.version)" >> $GITHUB_ENV
-        Write-Host "NOTES=$($json.notes)" >> $GITHUB_ENV
-        echo "::set-output name=version::$($json.version)"
-        echo "::set-output name=notes::$($json.notes)"
-
-    - name: List build directory
-      run: dir build
+        Write-Host "VERSION=$($json.version)" >> $env:GITHUB_ENV
+        Write-Host "NOTES=$($json.notes)" >> $env:GITHUB_ENV
 
     - name: Move del.exe to installer folder
       shell: pwsh
       run: |
         $exeSource = "$env:GITHUB_WORKSPACE\build\del.exe"
         $installerFolder = "$env:GITHUB_WORKSPACE\installer"
-    
-        if (-Not (Test-Path $exeSource)) {
-            Write-Error "del.exe не найден: $exeSource"
-            exit 1
+        if (-not (Test-Path $exeSource)) {
+          Write-Error "del.exe not found: $exeSource"
+          exit 1
         }
-
-        Write-Host "Перемещаем del.exe в $installerFolder"
         Move-Item -Path $exeSource -Destination $installerFolder -Force
 
     - name: Build MSI
       shell: pwsh
       run: |
         Set-Location $env:GITHUB_WORKSPACE
-        $delPath = Join-Path $env:GITHUB_WORKSPACE "installer\del.exe"
-        candle installer\Product.wxs -ext WixUIExtension -loc installer\en-us.wxl -loc installer\ru-ru.wxl -dDelExePath="$env:GITHUB_WORKSPACE/build/del.exe" -out installer\
+        candle installer\Product.wxs -ext WixUIExtension -dDelExePath="$env:GITHUB_WORKSPACE\installer\del.exe" -out installer\
         light installer\Product.wixobj -ext WixUIExtension -o installer\DelAfterReboot.msi -b installer
-      
-    - name: Create GitHub Release
+
+    # Branching logic:
+    # - If triggered by workflow_dispatch and release == "yes": try create release + upload asset.
+    #   If release creation/upload fails -> fallback to artifact upload.
+    # - If workflow_dispatch and release == "no" OR push: upload artifact.
+    - name: Ensure MSI exists
+      shell: pwsh
+      run: |
+        $msi = "$env:GITHUB_WORKSPACE\installer\DelAfterReboot.msi"
+        if (-not (Test-Path $msi)) {
+          Write-Error "MSI not found: $msi"
+          exit 1
+        }
+
+    - name: Create GitHub Release (dispatch + release=yes)
       id: create_release
+      if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.release == 'yes' }}
       uses: softprops/action-gh-release@v1
       with:
-        tag_name: v${{ steps.releaseinfo.outputs.version }}
-        name: v${{ steps.releaseinfo.outputs.version }}
-        body: ${{ steps.releaseinfo.outputs.notes }}
-        allowUpdates: true
+        tag_name: v${{ env.VERSION }}
+        name: v${{ env.VERSION }}
+        body: ${{ env.NOTES }}
       env:
         GITHUB_TOKEN: ${{ secrets.PUBLISH_TOKEN }}
+      continue-on-error: true
 
-    - name: Upload MSI to Release
+    - name: Upload to GitHub Release (dispatch + release=yes)
+      id: upload_release_asset
+      if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.release == 'yes' && steps.create_release.outcome == 'success' }}
       uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.PUBLISH_TOKEN }}
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
         asset_path: installer\DelAfterReboot.msi
         asset_name: DelAfterReboot.msi
         asset_content_type: application/x-msi
+      env:
+        GITHUB_TOKEN: ${{ secrets.PUBLISH_TOKEN }}
+      continue-on-error: true
+
+    - name: Upload MSI as artifact (fallback or normal flow)
+      if: |
+        ${{ github.event_name == 'push' }} ||
+        ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.release == 'no' }} ||
+        ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.release == 'yes' && (steps.create_release.outcome != 'success' || steps.upload_release_asset.outcome != 'success') }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: DelAfterReboot-msi
+        path: installer/DelAfterReboot.msi
