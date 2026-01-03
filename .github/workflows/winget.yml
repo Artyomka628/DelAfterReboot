@@ -1,0 +1,17 @@
+name: Publish to WinGet
+
+on:
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: WinGet Releaser
+        uses: vedantmgoyal9/winget-releaser@v2
+        with:
+          token: ${{ secrets.PUBLISH_TOKEN }}
+          identifier: DrygvalArtyom.DelAfterReboot

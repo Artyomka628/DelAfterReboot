@@ -1,0 +1,145 @@
+name: Build MSI and Release (x86)
+
+on:
+  workflow_dispatch:
+  push:
+
+jobs:
+  build-release:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup MSYS2
+      uses: msys2/setup-msys2@v2
+      with:
+        msystem: MINGW32
+        update: true
+        install: >
+          mingw-w64-i686-gcc
+
+    - name: Build del.exe
+      shell: msys2 {0}
+      run: |
+        i686-w64-mingw32-gcc del.c -o del.exe -std=c99 -O2 -march=i686 -mtune=generic -D_WIN32_WINNT=0x0501 -DWINVER=0x0501 -static-libgcc -static-libstdc++ -fno-asynchronous-unwind-tables
+
+    - name: Prepare build directory
+      run: |
+        mkdir build
+        move del.exe build\del.exe
+
+    - name: Read release info
+      id: releaseinfo
+      run: |
+        $json = Get-Content release.json | ConvertFrom-Json
+        Write-Host "VERSION=$($json.version)" >> $GITHUB_ENV
+        Write-Host "NOTES=$($json.notes)" >> $GITHUB_ENV
+        echo "::set-output name=version::$($json.version)"
+        echo "::set-output name=notes::$($json.notes)"
+
+    - name: List build directory
+      run: dir build
+
+    - name: Move del.exe to installer folder
+      shell: pwsh
+      run: |
+        $exeSource = "$env:GITHUB_WORKSPACE\build\del.exe"
+        $installerFolder = "$env:GITHUB_WORKSPACE\installer"
+    
+        if (-Not (Test-Path $exeSource)) {
+            Write-Error "del.exe не найден: $exeSource"
+            exit 1
+        }
+
+        Write-Host "Перемещаем del.exe в $installerFolder"
+        Move-Item -Path $exeSource -Destination $installerFolder -Force
+
+    - name: Build MSI
+      shell: pwsh
+      run: |
+        Set-Location $env:GITHUB_WORKSPACE
+        $delPath = Join-Path $env:GITHUB_WORKSPACE "installer\del.exe"
+        candle installer\Product.wxs -dDelExePath="$env:GITHUB_WORKSPACE/build/del.exe" -out installer\Product.wixobj
+        light installer\Product.wixobj -o installer\DelAfterReboot.msi -b installer
+        
+    - name: Build MSI with logs and inspect content
+      if: always()
+      shell: pwsh
+      run: |
+        Set-Location $env:GITHUB_WORKSPACE
+
+        Write-Host "=== Проверим содержимое папки installer ==="
+        Get-ChildItem -Path "$env:GITHUB_WORKSPACE\installer" -Recurse | ForEach-Object { $_.FullName }
+
+        # 1) candle с логом
+        Write-Host "Running candle..."
+        & candle installer\Product.wxs -out build\Product.wixobj *> build\candle.log 2>&1
+        Write-Host "candle exit $LASTEXITCODE"
+
+        # 2) light с base dir = installer и логом
+        Write-Host "Running light..."
+        & light build\Product.wixobj -o build\DelAfterReboot.msi -b installer *> build\light.log 2>&1
+        Write-Host "light exit $LASTEXITCODE"
+
+        # 3) покажем размер полученного MSI
+        if (Test-Path "build\DelAfterReboot.msi") {
+          $size = (Get-Item "build\DelAfterReboot.msi").Length
+          Write-Host "Built MSI size: $size bytes"
+        } else {
+          Write-Host "MSI не найден"
+        }
+
+        # 4) Установим 7zip и посмотрим содержимое MSI (список файлов внутри)
+        choco install 7zip -y
+        & "C:\Program Files\7-Zip\7z.exe" l build\DelAfterReboot.msi > build\msi-7z-list.txt
+
+        Write-Host "=== Содержимое build (для отладки) ==="
+        Get-ChildItem -Path "$env:GITHUB_WORKSPACE\build" -Recurse | ForEach-Object { "$($_.FullName) `t $($_.Length) bytes" }
+      
+    - name: Create GitHub Release
+      id: create_release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: v${{ steps.releaseinfo.outputs.version }}
+        name: v${{ steps.releaseinfo.outputs.version }}
+        body: ${{ steps.releaseinfo.outputs.notes }}
+        allowUpdates: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.PUBLISH_TOKEN }}
+
+    - name: Upload MSI to Release
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.PUBLISH_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: build\DelAfterReboot.msi
+        asset_name: DelAfterReboot.msi
+        asset_content_type: application/x-msi
+
+    - name: Debug on failure
+      if: failure()
+      shell: pwsh
+      run: |
+        $outFile = "$env:GITHUB_WORKSPACE\workspace-tree-2.txt"
+        Write-Host "Workflow завершился с ошибкой. Сохраняем дерево файлов в $outFile"
+
+        # Используем встроенный tree
+        cmd /c "tree /f `"$env:GITHUB_WORKSPACE`" > `"$outFile`""
+
+        Write-Host "Содержимое installer для наглядности:"
+        cmd /c "tree /f `"$env:GITHUB_WORKSPACE\installer`""
+
+    - name: Upload debug artifacts
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: msi-debug-artifacts
+        path: |
+          build\DelAfterReboot.msi
+          build\candle.log
+          build\light.log
+          build\msi-7z-list.txt
+          workspace-tree.txt
+          workspace-tree-2.txt

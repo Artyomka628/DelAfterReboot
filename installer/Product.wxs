@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+
+  <Product
+    Id="*"
+    Name="DelAfterReboot"
+    Version="1.0.0"
+    Manufacturer="Drygval Artyom"
+    UpgradeCode="51c17be7-a609-446b-a3b9-99cab967ab59"
+    Language="1033">
+
+    <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine" Platform="x86"/>
+    <MajorUpgrade DowngradeErrorMessage="A newer version is already installed."/>
+    <Media Id="1" Cabinet="product.cab" EmbedCab="yes"/>
+
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramFilesFolder">
+        <Directory Id="INSTALLFOLDER" Name="DelAfterReboot">
+
+          <Component Id="DelExe" Guid="3f2504e0-4f89-11d3-9a0c-0305e82c3301">
+            <File Source="D:\A\DELAFTERREBOOT\DELAFTERREBOOT\INSTALLER\del.exe" KeyPath="yes"/>
+          </Component>
+
+          <Component Id="RegAndEnv" Guid="9a2c8b10-4d11-4d0c-8f32-7a9bdf24b5f1">
+            <Environment
+              Id="DelAfterRebootPath"
+              Name="DelAfterRebootPath"
+              Value="[INSTALLFOLDER]"
+              Action="set"
+              System="yes"/>
+            
+            <RegistryKey Root="HKLM" Key="Software\DelAfterReboot">
+              <RegistryValue Name="InstallPath" Type="string" Value="[INSTALLFOLDER]" KeyPath="yes"/>
+            </RegistryKey>
+          </Component>
+
+          <Component Id="ContextMenu" Guid="6b3f7b10-0a54-4a5c-8f8d-1b0e1f3d2c4e">
+            <RegistryKey Root="HKLM" Key="Software\Classes\Directory\shell\DelAfterReboot">
+              <RegistryValue Type="string" Value="DelAfterReboot" KeyPath="yes"/>
+              <RegistryValue Name="HasLUAShield" Type="string" Value=""/>
+            </RegistryKey>
+
+            <RegistryKey Root="HKLM" Key="Software\Classes\Directory\shell\DelAfterReboot\command">
+              <RegistryValue Type="string" Value='cmd /c "%DelAfterRebootPath%\del.exe" "%1"'/>
+            </RegistryKey>
+          </Component>
+
+        </Directory>
+      </Directory>
+    </Directory>
+
+    <Feature Id="MainFeature" Title="DelAfterReboot" Level="1">
+      <ComponentRef Id="DelExe"/>
+      <ComponentRef Id="RegAndEnv"/>
+      <ComponentRef Id="ContextMenu"/>
+    </Feature>
+
+  </Product>
+</Wix>
