@@ -20,36 +20,27 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Restore MSYS2 cache
-      id: msys2-cache
-      uses: actions/cache@v3
-      with:
-        path: |
-          C:\msys64\var\cache\pacman\pkg
-          C:\msys64\mingw32
-        key: msys2-${{ runner.os }}-gcc-${{ hashFiles('release.json', 'installer/**') }}
-
     - name: Setup MSYS2 and install packages
+      if: steps.msys2-cache.outputs.cache-hit != 'true'
       uses: msys2/setup-msys2@v2
       with:
         msystem: MINGW32
         update: true
         install: >
           mingw-w64-i686-gcc
-
-    - name: Save MSYS2 cache (only when cache missed)
-      if: steps.msys2-cache.outputs.cache-hit != 'true'
-      uses: actions/cache@v3
-      with:
-        path: |
-          C:\msys64\var\cache\pacman\pkg
-          C:\msys64\mingw32
-        key: msys2-${{ runner.os }}-gcc-${{ hashFiles('release.json', 'installer/**') }}
+          mingw-w64-i686-binutils
 
     - name: Build del.exe
       shell: msys2 {0}
       run: |
-        i686-w64-mingw32-gcc del.c -o del.exe -std=c99 -O2 -march=i686 -mtune=generic -D_WIN32_WINNT=0x0501 -DWINVER=0x0501 -static-libgcc -static-libstdc++ -fno-asynchronous-unwind-tables
+        gcc del.c -o del.exe -std=c99 -O2 -march=i686 -mtune=generic -D_WIN32_WINNT=0x0600 -DWINVER=0x0600 -static-libgcc -static-libstdc++ -fno-asynchronous-unwind-tables
+
+    - name: Embed manifest into exe
+      shell: powershell
+      run: |
+        $mtPath = "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\mt.exe"
+        if (-not (Test-Path $mtPath)) { throw "mt.exe не найден!" }
+        & $mtPath -manifest app.manifest -outputresource:del.exe;#1
 
     - name: Prepare build directory
       run: |
@@ -95,7 +86,7 @@ jobs:
           exit 1
         }
 
-    - name: Create GitHub Release (dispatch + release=yes)
+    - name: Create GitHub Release
       id: create_release
       if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.release == 'yes' }}
       uses: softprops/action-gh-release@v1
@@ -107,7 +98,7 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.PUBLISH_TOKEN }}
       continue-on-error: true
 
-    - name: Upload to GitHub Release (dispatch + release=yes)
+    - name: Upload to GitHub Release
       id: upload_release_asset
       if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.release == 'yes' && steps.create_release.outcome == 'success' }}
       uses: actions/upload-release-asset@v1
@@ -120,7 +111,7 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.PUBLISH_TOKEN }}
       continue-on-error: true
 
-    - name: Upload MSI as artifact (fallback or normal flow)
+    - name: Upload MSI as artifact
       if: |
         ${{ github.event_name == 'push' }} ||
         ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.release == 'no' }} ||
