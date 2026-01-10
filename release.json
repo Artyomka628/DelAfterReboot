@@ -1,0 +1,16 @@
+{
+  "version": "1.0.0",
+  "notes": [
+    "# Release 1.0",
+    "",
+    "(First release)",
+    "",
+    "## Bug fixes",
+    "- Fixed UAC",
+    "- Fixed building",
+    "- Many other bugs have been fixed",
+    "",
+    "## New architectures",
+    "Added building for arm64 and x64"
+  ]
+}
