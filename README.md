@@ -9,7 +9,7 @@ Install Python: https://www.python.org/downloads/
 
 Install pyinstaller `pip install pyinstaller`
 
-Run `pyinstaller --onefile --console --uac-admin --icon=icon.ico del.py`
+Run `pyinstaller --onefile --console --icon=icon.ico del.py`
 
 Done! Now you have del.exe in dist\del.exe
 
@@ -17,18 +17,14 @@ Move it where you want
 
 # Adding DelAfterReboot to context menu
 
-Before doing this, create a variable called "DelAfterRebootPath"
-
-Run `setx DelAfterRebootPath (path to del.exe)`
-
-Download and run install.reg from repository
+Download, edit and run install.reg from repository
 
 Or do it manually (in cmd with administrator rights):
 
 ```
 reg add "HKEY_CLASSES_ROOT\Directory\shell\DelAfterReboot" /ve /t REG_SZ /d "DelAfterReboot" /f
 reg add "HKEY_CLASSES_ROOT\Directory\shell\DelAfterReboot" /v HasLUAShield /t REG_SZ /d "" /f
-reg add "HKEY_CLASSES_ROOT\Directory\shell\DelAfterReboot\command" /ve /t REG_SZ /d "cmd /c \"%%DelAfterRebootPath%%\del.exe\" \"%%1\"" /f
+reg add "HKEY_CLASSES_ROOT\Directory\shell\DelAfterReboot\command" /ve /t REG_SZ /d "cmd /c \"(PATH TO DEL.EXE)\" \"%%1\"" /f
 ```
 
 # Uninstalling
