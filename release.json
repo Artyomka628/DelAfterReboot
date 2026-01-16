@@ -1,16 +1,11 @@
 {
-  "version": "1.0.0",
+  "version": "1.5.0",
   "notes": [
-    "# Release 1.0",
+    "# Release 1.5",
     "",
-    "(First release)",
+    "(Bug fixes)",
     "",
     "## Bug fixes",
-    "- Fixed UAC",
-    "- Fixed building",
-    "- Many other bugs have been fixed",
-    "",
-    "## New architectures",
-    "Added building for arm64 and x64"
+    "This update did not add any new features, but it did fix some bugs."
   ]
 }

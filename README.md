@@ -1,6 +1,14 @@
 # DelAfterReboot
 A simple python script that forcibly deletes folders recursively before the system boots.
 
+# DelAfterReboot is now in WinGet!
+Now you can install DelAfterReboot with one command,
+without downloading the msi file and manually building it.
+
+Просто запустите команду 'winget install delafterreboot'
+
+To update, use the same command
+
 # Building
 
 Download del.py and icon.ico from repository

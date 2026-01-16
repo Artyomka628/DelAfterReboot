@@ -12,20 +12,27 @@ def _print_hook(*args, **kwargs):
     text = " ".join(str(a) for a in args)
     _print_log.append(text)
     if _use_debug:
-        ctypes.windll.user32.MessageBoxW(0, text, "DEBUG LOG", 0x40)
+        try:
+            ctypes.windll.user32.MessageBoxW(0, text, "DEBUG LOG", 0x40)
+        except Exception:
+            pass
 
 def show_log(title="DEBUG LOG"):
     text = "\n".join(_print_log) if _print_log else "Log is empty"
-    ctypes.windll.user32.MessageBoxW(0, text, title, 0x40)
+    try:
+        ctypes.windll.user32.MessageBoxW(0, text, title, 0x40)
+    except Exception:
+        print(text)
 
 def ensure_admin():
     try:
         is_admin = ctypes.windll.shell32.IsUserAnAdmin()
-    except:
+    except Exception:
         is_admin = False
 
     if not is_admin:
-        params = " ".join(f'"{arg}"' for arg in sys.argv[1:])
+        script = os.path.abspath(sys.argv[0])
+        params = " ".join(f'"{arg}"' for arg in [script] + sys.argv[1:])
         ctypes.windll.shell32.ShellExecuteW(
             None,
             "runas",
@@ -38,7 +45,7 @@ def ensure_admin():
 
 def is_admin():
     try:
-        return ctypes.windll.shell32.IsUserAnAdmin()
+        return bool(ctypes.windll.shell32.IsUserAnAdmin())
     except Exception:
         return False
 
@@ -51,18 +58,24 @@ def collect_paths_bottom_up(root_path):
             files.append(os.path.join(current_root, name))
         for name in dirnames:
             dirs.append(os.path.join(current_root, name))
-
+            
     dirs.append(root_path)
+
     return files + dirs
 
 def write_pending_delete(paths):
     key_path = r"SYSTEM\CurrentControlSet\Control\Session Manager"
+    access = winreg.KEY_SET_VALUE | winreg.KEY_QUERY_VALUE
+    try:
+        access |= winreg.KEY_WOW64_64KEY
+    except AttributeError:
+        pass
 
     reg_key = winreg.OpenKey(
         winreg.HKEY_LOCAL_MACHINE,
         key_path,
         0,
-        winreg.KEY_SET_VALUE | winreg.KEY_QUERY_VALUE
+        access
     )
 
     try:
@@ -73,10 +86,11 @@ def write_pending_delete(paths):
     except FileNotFoundError:
         existing = []
 
-    new_entries = existing[:]
+    new_entries = list(existing) if isinstance(existing, list) else []
 
     for path in paths:
-        nt_path = r"\??\\" + os.path.abspath(path)
+        abs_path = os.path.abspath(path)
+        nt_path = r"\??\{}".format(abs_path)
         new_entries.append(nt_path)
         new_entries.append("")
 
@@ -94,7 +108,7 @@ def main():
     global _use_debug
 
     ensure_admin()
-    
+
     if not is_admin():
         print("Error: administrator privileges are required.")
         if _use_debug:
@@ -104,10 +118,6 @@ def main():
     if len(sys.argv) < 2:
         print("Usage: python del.py <folder_path> [--debug]")
         print("--debug - debug print with MessageBox")
-        print("errorlevel values:")
-        print("0 - success, 1 - not an admin, 2 - wrong path, 3 - registry write error")
-        if _use_debug:
-            show_log()
         sys.exit(2)
 
     folder = sys.argv[1]
