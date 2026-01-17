@@ -2,9 +2,9 @@
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
 
   <Product
-    Id="96586299-8140-41e9-a301-8dcac63d0b66"
+    Id="27A98343-0F3F-4C84-AB45-633E9A98508F"
     Name="DelAfterReboot"
-    Version="1.5.0"
+    Version="2.0.0"
     Manufacturer="Drygval Artyom"
     UpgradeCode="3aa0f3ee-e4a1-4030-b0b0-0245e4aedb57"
     Language="1033">
@@ -20,7 +20,7 @@
       DowngradeErrorMessage="Newer version is already installed."
       Schedule="afterInstallInitialize"/>
 
-    <Media Id="1" Cabinet="product.cab" EmbedCab="yes"/>
+    <Media Id="1" Cabinet="product.cab" EmbedCab="yes" CompressionLevel="high"/>
 
     <UIRef Id="WixUI_InstallDir"/>
     <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER"/>
@@ -65,7 +65,7 @@
               Key="Software\Classes\Directory\shell\DelAfterReboot\command">
               <RegistryValue
 				Type="expandable"
-				Value='cmd /c ""[INSTALLFOLDER]del.exe" "%1""'/>
+				Value='"[INSTALLFOLDER]del.exe" "%1"'/>
             </RegistryKey>
 
           </Component>

@@ -1,11 +1,14 @@
 {
-  "version": "1.5.0",
+  "version": "2.0.0",
   "notes": [
-    "# Release 1.5",
+    "# Release 2.0",
     "",
-    "(Bug fixes)",
+    "(Fixed context menu)",
     "",
     "## Bug fixes",
-    "This update did not add any new features, but it did fix some bugs."
+    "Fixed launch from context menu.",
+    "",
+    "> [!NOTE]",
+    "> This version is the first one that works from the context menu."
   ]
 }

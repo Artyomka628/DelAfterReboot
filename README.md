@@ -5,7 +5,7 @@ A simple python script that forcibly deletes folders recursively before the syst
 Now you can install DelAfterReboot with one command,
 without downloading the msi file and manually building it.
 
-Просто запустите команду 'winget install delafterreboot'
+Just run in cmd: `winget install delafterreboot`
 
 To update, use the same command
 
@@ -30,10 +30,12 @@ Download, edit and run install.reg from repository
 Or do it manually (in cmd with administrator rights):
 
 ```
-reg add "HKEY_CLASSES_ROOT\Directory\shell\DelAfterReboot" /ve /t REG_SZ /d "DelAfterReboot" /f
-reg add "HKEY_CLASSES_ROOT\Directory\shell\DelAfterReboot" /v HasLUAShield /t REG_SZ /d "" /f
-reg add "HKEY_CLASSES_ROOT\Directory\shell\DelAfterReboot\command" /ve /t REG_SZ /d "cmd /c \"(PATH TO DEL.EXE)\" \"%%1\"" /f
+reg add "HKCR\Directory\shell\DelAfterReboot" /ve /d "DelAfterReboot" /f
+reg add "HKCR\Directory\shell\DelAfterReboot" /v "Icon" /d "%ProgramFiles%\DelAfterReboot\del.exe,0" /f
+reg add "HKCR\Directory\shell\DelAfterReboot\command" /ve /d "\"%ProgramFiles%\DelAfterReboot\del.exe\" \"%1\"" /f
 ```
+
+Replace %ProgramFiles%\DelAfterReboot\ to your real path to del.exe
 
 # Uninstalling
 

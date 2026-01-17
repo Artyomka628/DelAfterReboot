@@ -2,7 +2,8 @@ Windows Registry Editor Version 5.00
 
 [HKEY_CLASSES_ROOT\Directory\shell\DelAfterReboot]
 @="DelAfterReboot"
-"HasLUAShield"=""
+"Icon"="%ProgramFiles%\\DelAfterReboot\\del.exe,0"
 
 [HKEY_CLASSES_ROOT\Directory\shell\DelAfterReboot\command]
-@="cmd /c \"(PATH TO DEL.EXE)\" \"%1\"
+@="\"%ProgramFiles%\\DelAfterReboot\\del.exe\" \"%1\""
+

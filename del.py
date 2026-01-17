@@ -11,15 +11,11 @@ _use_debug = False
 def _print_hook(*args, **kwargs):
     text = " ".join(str(a) for a in args)
     _print_log.append(text)
-    if _use_debug:
-        try:
-            ctypes.windll.user32.MessageBoxW(0, text, "DEBUG LOG", 0x40)
-        except Exception:
-            pass
 
 def show_log(title="DEBUG LOG"):
     text = "\n".join(_print_log) if _print_log else "Log is empty"
     try:
+        ctypes.windll.user32.MessageBoxW(0, "\n".join(sys.argv), "Arguments | " + title , 0x40)
         ctypes.windll.user32.MessageBoxW(0, text, title, 0x40)
     except Exception:
         print(text)
@@ -32,7 +28,15 @@ def ensure_admin():
 
     if not is_admin:
         script = os.path.abspath(sys.argv[0])
-        params = " ".join(f'"{arg}"' for arg in [script] + sys.argv[1:])
+        try:
+            exe_abs = os.path.abspath(sys.executable)
+            if exe_abs.lower() == script.lower() or getattr(sys, "frozen", False):
+                params = " ".join(f'"{arg}"' for arg in sys.argv[1:])
+            else:
+                params = " ".join(f'"{arg}"' for arg in [script] + sys.argv[1:])
+        except Exception:
+            params = " ".join(f'"{arg}"' for arg in [script] + sys.argv[1:])
+
         ctypes.windll.shell32.ShellExecuteW(
             None,
             "runas",
