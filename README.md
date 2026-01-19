@@ -43,6 +43,13 @@ Run in cmd with administrator rights:
 
 `reg delete "HKEY_CLASSES_ROOT\Directory\shell\DelAfterReboot" /f`
 
+# Compatibility
+| System | Status |
+| :--- | :--- |
+| Windows 7 (Python 3.8) | ✅ Compatible, but only x32 version |
+| Windows 10+ (Python 3.12+) | ✅ Compatible |
+| Windows 10+ (Python < 3.12, 3.8+) | ✅ Compatible, but only x32 version |
+| Windows < 7 (or Python < 3.8) | ❌ Not compatible |
 # Risks of using DelAfterReboot
 > [!CAUTION]
 > Do not use this to delete system folders or folders with a large number of files.

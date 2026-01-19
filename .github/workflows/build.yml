@@ -23,7 +23,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        arch: [x86, x64]
+        include:
+          - arch: x86
+            python: "3.8"
+          - arch: x64
+            python: "3.12"
 
     steps:
       - uses: actions/checkout@v4
@@ -31,7 +35,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python }}
           architecture: ${{ matrix.arch }}
 
       - name: Install PyInstaller

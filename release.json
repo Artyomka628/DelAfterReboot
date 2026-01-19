@@ -1,14 +1,12 @@
 {
-  "version": "2.0.0",
+  "version": "2.2.0",
   "notes": [
-    "# Release 2.0",
+    "# Release 2.2",
     "",
-    "(Fixed context menu)",
+    "(Greater compatibility)",
     "",
-    "## Bug fixes",
-    "Fixed launch from context menu.",
-    "",
-    "> [!NOTE]",
-    "> This version is the first one that works from the context menu."
+    "## Compatibility",
+    "Now x32 exe uses python 3.8 (latest python for windows 7)",
+    ""
   ]
 }

@@ -2,9 +2,9 @@
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
 
   <Product
-    Id="27A98343-0F3F-4C84-AB45-633E9A98508F"
+    Id="7D831658-0F82-48F7-83F0-1CC811CF78E1"
     Name="DelAfterReboot"
-    Version="2.0.0"
+    Version="2.2.0"
     Manufacturer="Drygval Artyom"
     UpgradeCode="3aa0f3ee-e4a1-4030-b0b0-0245e4aedb57"
     Language="1033">
