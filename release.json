@@ -1,12 +1,12 @@
 {
-  "version": "2.2.0",
+  "version": "2.5.0",
   "notes": [
-    "# Release 2.2",
+    "# Release 2.5",
     "",
-    "(Greater compatibility)",
+    "(New features)",
     "",
-    "## Compatibility",
-    "Now x32 exe uses python 3.8 (latest python for windows 7)",
-    ""
+    "## New features",
+    "- Added progress bar. Now script is not that boring.",
+    "- Added --cancel command. Now you can cancel what you've done. (But if you reboot, nothing can restore those files)"
   ]
 }
