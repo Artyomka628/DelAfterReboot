@@ -77,6 +77,22 @@ jobs:
           candle installer\Product-$archFlag.wxs -ext WixUIExtension -dDelExePath="$env:GITHUB_WORKSPACE\installer\delafterreboot.exe" -out installer\
           light installer\Product-$archFlag.wixobj -ext WixUIExtension -o installer\DelAfterReboot-${archFlag}.msi -b installer
 
+      - name: Create debug archive on failure
+        if: failure()
+        shell: pwsh
+        run: |
+          $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
+          $zipPath = "debug_${timestamp}_x86x64.zip"
+          Compress-Archive -Path "$env:GITHUB_WORKSPACE" -DestinationPath $zipPath -CompressionLevel Optimal
+          Write-Host "Created debug archive: $zipPath"
+
+      - name: Upload debug artifact on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-workspace-x86x64-${{ github.run_id }}
+          path: debug_*.zip
+          retention-days: 7
 
       - name: Upload MSI artifact
         uses: actions/upload-artifact@v4
@@ -131,6 +147,24 @@ jobs:
           & "$wixPath\candle.exe" installer\Product-arm64.wxs -ext WixUIExtension -dDelExePath="$env:GITHUB_WORKSPACE\installer\delafterreboot.exe" -out installer\
           Write-Host "== light.exe =="
           & "$wixPath\light.exe" installer\Product-arm64.wixobj -ext WixUIExtension -o installer\DelAfterReboot-arm64.msi -b installer
+
+      - name: Create debug archive on failure
+        if: failure()
+        shell: pwsh
+        run: |
+          $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
+          $zipPath = "debug_${timestamp}_arm64.zip"
+          Compress-Archive -Path "$env:GITHUB_WORKSPACE" -DestinationPath $zipPath -CompressionLevel Optimal
+          Write-Host "Created debug archive: $zipPath"
+
+      - name: Upload debug artifact on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-workspace-arm64-${{ github.run_id }}
+          path: debug_*.zip
+          retention-days: 7
+
       - name: Upload ARM64 MSI artifact
         uses: actions/upload-artifact@v4
         with:
