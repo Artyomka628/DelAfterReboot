@@ -1,12 +1,13 @@
 {
-  "version": "2.5.0",
+  "version": "2.7.0",
   "notes": [
-    "# Release 2.5",
+    "# Release 2.7",
     "",
-    "(New features)",
+    "(Updates)",
     "",
-    "## New features",
-    "- Added progress bar. Now script is not that boring.",
-    "- Added --cancel command. Now you can cancel what you've done. (But if you reboot, nothing can restore those files)"
+    "## Updates",
+    "- Renamed executable to delafterreboot.exe across docs and installers.",
+    "- Installer now adds install directory to PATH.",
+    "- update.py now accepts version as an argument (use \"null\" to keep current)."
   ]
 }

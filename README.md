@@ -11,15 +11,15 @@ To update, use the same command
 
 # Building
 
-Download del.py and icon.ico from repository
+Download delafterreboot.py and icon.ico from repository
 
 Install Python: https://www.python.org/downloads/
 
 Install pyinstaller `pip install pyinstaller`
 
-Run `pyinstaller --onefile --console --icon=icon.ico del.py`
+Run `pyinstaller --onefile --console --icon=icon.ico --name delafterreboot delafterreboot.py`
 
-Done! Now you have del.exe in dist\del.exe
+Done! Now you have delafterreboot.exe in dist\delafterreboot.exe
 
 Move it where you want
 
@@ -31,11 +31,19 @@ Or do it manually (in cmd with administrator rights):
 
 ```
 reg add "HKCR\Directory\shell\DelAfterReboot" /ve /d "DelAfterReboot" /f
-reg add "HKCR\Directory\shell\DelAfterReboot" /v "Icon" /d "%ProgramFiles%\DelAfterReboot\del.exe,0" /f
-reg add "HKCR\Directory\shell\DelAfterReboot\command" /ve /d "\"%ProgramFiles%\DelAfterReboot\del.exe\" \"%1\"" /f
+reg add "HKCR\Directory\shell\DelAfterReboot" /v "Icon" /d "%ProgramFiles%\DelAfterReboot\delafterreboot.exe,0" /f
+reg add "HKCR\Directory\shell\DelAfterReboot\command" /ve /d "\"%ProgramFiles%\DelAfterReboot\delafterreboot.exe\" \"%1\"" /f
 ```
 
-Replace %ProgramFiles%\DelAfterReboot\ to your real path to del.exe
+Replace %ProgramFiles%\DelAfterReboot\ to your real path to delafterreboot.exe
+
+# Add DelAfterReboot folder to PATH (cmd)
+
+Run in cmd with administrator rights:
+
+```
+setx /M PATH "%PATH%;%ProgramFiles%\DelAfterReboot"
+```
 
 # Uninstalling
 

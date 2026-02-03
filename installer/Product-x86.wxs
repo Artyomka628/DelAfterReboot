@@ -2,9 +2,9 @@
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
 
   <Product
-    Id="67953359-1B22-4AE9-810F-ADD658072274"
+    Id="BF381F5D-AD3A-4A7E-B6EA-BEAA749AC692"
     Name="DelAfterReboot"
-    Version="2.5.0"
+    Version="3.0.0"
     Manufacturer="Drygval Artyom"
     UpgradeCode="3aa0f3ee-e4a1-4030-b0b0-0245e4aedb57"
     Language="1033">
@@ -35,7 +35,7 @@
 
           <!-- EXE -->
           <Component Id="DelExe" Guid="78ad24a1-c0af-4041-80e1-58cff44daa06">
-            <File Source="D:\A\DELAFTERREBOOT\DELAFTERREBOOT\INSTALLER\del.exe" KeyPath="yes"/>
+            <File Source="D:\A\DELAFTERREBOOT\DELAFTERREBOOT\INSTALLER\delafterreboot.exe" KeyPath="yes"/>
           </Component>
 
           <!-- Install path in registry -->
@@ -47,6 +47,14 @@
                 Value="[INSTALLFOLDER]"
                 KeyPath="yes"/>
             </RegistryKey>
+            <Environment
+              Id="AddToPath"
+              Name="PATH"
+              Value="[INSTALLFOLDER]"
+              Permanent="no"
+              Part="last"
+              Action="set"
+              System="yes"/>
           </Component>
 
           <!-- Context menu -->
@@ -57,7 +65,7 @@
               Key="Software\Classes\Directory\shell\DelAfterReboot">
               <RegistryValue Type="string" Value="DelAfterReboot" KeyPath="yes"/>
               <RegistryValue Name="HasLUAShield" Type="string" Value=""/>
-              <RegistryValue Name="Icon" Type="expandable" Value="[INSTALLFOLDER]del.exe,0"/>
+              <RegistryValue Name="Icon" Type="expandable" Value="[INSTALLFOLDER]delafterreboot.exe,0"/>
             </RegistryKey>
 
             <RegistryKey
@@ -65,7 +73,7 @@
               Key="Software\Classes\Directory\shell\DelAfterReboot\command">
               <RegistryValue
 				Type="expandable"
-				Value='"[INSTALLFOLDER]del.exe" "%1"'/>
+				Value='"[INSTALLFOLDER]delafterreboot.exe" "%1"'/>
             </RegistryKey>
 
           </Component>

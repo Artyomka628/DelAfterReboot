@@ -192,7 +192,7 @@ def main():
         sys.exit(1)
 
     if len(sys.argv) < 2:
-        print("Usage: python del.py <folder_path> [--debug]  or  python del.py --cancel [--debug]")
+        print("Usage: python delafterreboot.py <folder_path> [--debug]  or  python delafterreboot.py --cancel [--debug]")
         print("--debug - debug print with MessageBox")
         print("--cancel - clear PendingFileRenameOperations (cancel pending deletes)")
         sys.exit(2)

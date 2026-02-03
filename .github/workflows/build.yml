@@ -15,7 +15,7 @@ on:
     branches:
       - main
     paths:
-      - 'del.py'
+      - 'delafterreboot.py'
 
 jobs:
   build-x86-x64:
@@ -43,24 +43,23 @@ jobs:
           python -m pip install --upgrade pip
           pip install pyinstaller
 
-      - name: Build del.exe with PyInstaller
+      - name: Build delafterreboot.exe with PyInstaller
         shell: pwsh
         run: |
-          pyinstaller --onefile --console --icon=icon.ico del.py --name del-${{ matrix.arch }}.exe
+          pyinstaller --onefile --console --icon=icon.ico delafterreboot.py --name delafterreboot.exe
 
       - name: Prepare build directory
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path build
-          Move-Item -Path "dist/del-${{ matrix.arch }}.exe" -Destination "build/del.exe" -Force
+          Move-Item -Path "dist/delafterreboot.exe" -Destination "build/delafterreboot.exe" -Force
 
-
-      - name: Move del.exe to installer folder
+      - name: Move delafterreboot.exe to installer folder
         shell: pwsh
         run: |
           $installerFolder = "$env:GITHUB_WORKSPACE\installer"
           if (-not (Test-Path $installerFolder)) { New-Item -ItemType Directory -Path $installerFolder }
-          Move-Item -Path "$env:GITHUB_WORKSPACE\build/del.exe" -Destination $installerFolder -Force
+          Move-Item -Path "$env:GITHUB_WORKSPACE\build/delafterreboot.exe" -Destination $installerFolder -Force
 
       - name: Install WiX
         run: choco install wixtoolset --no-progress -y
@@ -75,7 +74,7 @@ jobs:
               $archFlag = 'x86'
           }
           Write-Host "Building MSI for architecture: $archFlag"
-          candle installer\Product-$archFlag.wxs -ext WixUIExtension -dDelExePath="$env:GITHUB_WORKSPACE\installer\del.exe" -out installer\
+          candle installer\Product-$archFlag.wxs -ext WixUIExtension -dDelExePath="$env:GITHUB_WORKSPACE\installer\delafterreboot.exe" -out installer\
           light installer\Product-$archFlag.wixobj -ext WixUIExtension -o installer\DelAfterReboot-${archFlag}.msi -b installer
 
 
@@ -101,23 +100,23 @@ jobs:
           python -m pip install --upgrade pip
           pip install pyinstaller
 
-      - name: Build del.exe for ARM64
+      - name: Build delafterreboot.exe for ARM64
         shell: pwsh
         run: |
-          pyinstaller --onefile --console --icon=icon.ico del.py --name del.exe
+          pyinstaller --onefile --console --icon=icon.ico delafterreboot.py --name delafterreboot.exe
 
       - name: Prepare build directory
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path build
-          Move-Item -Path "dist/del.exe" -Destination "build/del.exe" -Force
+          Move-Item -Path "dist/delafterreboot.exe" -Destination "build/delafterreboot.exe" -Force
 
-      - name: Move del.exe to installer folder
+      - name: Move delafterreboot.exe to installer folder
         shell: pwsh
         run: |
           $installerFolder = "$env:GITHUB_WORKSPACE\installer"
           if (-not (Test-Path $installerFolder)) { New-Item -ItemType Directory -Path $installerFolder }
-          Move-Item -Path "$env:GITHUB_WORKSPACE\build\del.exe" -Destination $installerFolder -Force
+          Move-Item -Path "$env:GITHUB_WORKSPACE\build\delafterreboot.exe" -Destination $installerFolder -Force
 
       - name: Install WiX
         run: choco install wixtoolset --no-progress -y
@@ -125,11 +124,11 @@ jobs:
       - name: Build MSI for ARM64
         shell: pwsh
         run: |
-          Move-Item "$env:GITHUB_WORKSPACE\installer\del.exe\del.exe" "$env:GITHUB_WORKSPACE\installer\del.exe" -Force
+          Move-Item "$env:GITHUB_WORKSPACE\installer\delafterreboot.exe" "$env:GITHUB_WORKSPACE\installer\delafterreboot.exe" -Force
           Set-Location $env:GITHUB_WORKSPACE
           $wixPath = "C:\Program Files (x86)\WiX Toolset v3.14\bin"
           Write-Host "== candle.exe =="
-          & "$wixPath\candle.exe" installer\Product-arm64.wxs -ext WixUIExtension -dDelExePath="$env:GITHUB_WORKSPACE\installer\del.exe" -out installer\
+          & "$wixPath\candle.exe" installer\Product-arm64.wxs -ext WixUIExtension -dDelExePath="$env:GITHUB_WORKSPACE\installer\delafterreboot.exe" -out installer\
           Write-Host "== light.exe =="
           & "$wixPath\light.exe" installer\Product-arm64.wixobj -ext WixUIExtension -o installer\DelAfterReboot-arm64.msi -b installer
       - name: Upload ARM64 MSI artifact
