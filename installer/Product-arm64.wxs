@@ -31,11 +31,11 @@
 
     <Directory Id="TARGETDIR" Name="SourceDir">
       <Directory Id="ProgramFiles64Folder">
-        <Directory Id="INSTALLFOLDER" Name="DelAfterReboot">
+        <Directory Id="INSTALLFOLDER" Name="DelAfterReboot-ARM64">
 
           <!-- EXE -->
           <Component Id="DelExe" Guid="0a642160-fa8a-44e8-9028-8d09588d9a68" Win64="yes">
-            <File Id="DelExe" Source="INSTALLER\del.exe\del.exe" KeyPath="yes" />
+            <File Id="DelExe" Source="INSTALLER\del-arm64.exe" KeyPath="yes" />
           </Component>
 
           <!-- Install path in registry -->
@@ -51,21 +51,20 @@
 
           <!-- Context menu -->
           <Component Id="ContextMenu" Guid="5581de34-b6e0-4da6-be1b-0d954f7b9ff3" Win64="yes">
-
             <RegistryKey
               Root="HKLM"
               Key="Software\Classes\Directory\shell\DelAfterReboot">
               <RegistryValue Type="string" Value="DelAfterReboot" KeyPath="yes"/>
               <RegistryValue Name="HasLUAShield" Type="string" Value=""/>
-              <RegistryValue Name="Icon" Type="expandable" Value="[INSTALLFOLDER]del.exe,0"/>
+              <RegistryValue Name="Icon" Type="expandable" Value="[INSTALLFOLDER]del-arm64.exe,0"/>
             </RegistryKey>
 
             <RegistryKey
               Root="HKLM"
               Key="Software\Classes\Directory\shell\DelAfterReboot\command">
               <RegistryValue
-				Type="expandable"
-				Value='"[INSTALLFOLDER]del.exe" "%1"'/>
+                Type="expandable"
+                Value='"[INSTALLFOLDER]del-arm64.exe" "%1"'/>
             </RegistryKey>
 
           </Component>
