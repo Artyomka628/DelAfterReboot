@@ -25,6 +25,9 @@
     <UIRef Id="WixUI_InstallDir"/>
     <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER"/>
 
+    <Icon Id="AppIcon.ico" SourceFile="icon.ico"/>
+    <Property Id="ARPPRODUCTICON" Value="AppIcon.ico" />
+
     <WixVariable Id="WixUILicenseRtf" Value="installer\license.rtf"/>
     <WixVariable Id="WixUIDialogBmp" Value="installer\banner.bmp"/>
     <WixVariable Id="WixUIBannerBmp" Value="installer\banner.bmp"/>
@@ -68,8 +71,8 @@
               Root="HKLM"
               Key="Software\Classes\Directory\shell\DelAfterReboot\command">
               <RegistryValue
-				Type="expandable"
-				Value='"[INSTALLFOLDER]delafterreboot.exe" "%1"'/>
+                Type="expandable"
+                Value='"[INSTALLFOLDER]delafterreboot.exe" "%1" --uac'/>
             </RegistryKey>
           </Component>
 
@@ -85,3 +88,4 @@
 
   </Product>
 </Wix>
+
