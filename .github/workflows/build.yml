@@ -64,7 +64,15 @@ jobs:
           # We run from repo root. Passing full relative path to EXE via variable.
           candle installer\Product-$arch.wxs -ext WixUIExtension -dDelExePath="installer\delafterreboot.exe" -out installer\
           light installer\Product-$arch.wixobj -ext WixUIExtension -o installer\DelAfterReboot-$arch.msi -b installer
-
+      
+      - name: Attest MSI provenance
+        if: >
+          (github.event_name == 'workflow_dispatch' && github.event.inputs.release == 'yes') ||
+          (github.event_name == 'push' && contains(github.event.head_commit.message, 'Release'))
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: installer/DelAfterReboot-${{ matrix.arch }}.msi
+          
       - name: Upload MSI Artifact
         uses: actions/upload-artifact@v4
         with:
@@ -111,7 +119,15 @@ jobs:
           
           & "$wixPath\candle.exe" installer\Product-arm64.wxs -ext WixUIExtension -dDelExePath="installer\delafterreboot.exe" -out installer\
           & "$wixPath\light.exe" installer\Product-arm64.wixobj -ext WixUIExtension -o installer\DelAfterReboot-arm64.msi -b installer
-
+     
+      - name: Attest MSI provenance (ARM64)
+        if: >
+          (github.event_name == 'workflow_dispatch' && github.event.inputs.release == 'yes') ||
+          (github.event_name == 'push' && contains(github.event.head_commit.message, 'Release'))
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: installer/DelAfterReboot-arm64.msi
+          
       - name: Upload MSI Artifact
         uses: actions/upload-artifact@v4
         with:

@@ -9,6 +9,11 @@ Just run in cmd: `winget install delafterreboot`
 
 To update, use the same command
 
+# Attestations are available
+To ensure you have original installer, run:
+
+`gh attestation verify (path to installrr) --repo Artyomka628/DelAfterReboot --verbose`
+
 # Building
 
 Download delafterreboot.py and icon.ico from repository
