@@ -38,63 +38,34 @@ jobs:
           python-version: ${{ matrix.python }}
           architecture: ${{ matrix.arch }}
 
-      - name: Install PyInstaller
+      - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
           pip install pyinstaller
 
-      - name: Build delafterreboot.exe with PyInstaller
+      - name: Build EXE with PyInstaller
         shell: pwsh
         run: |
           pyinstaller --onefile --console --icon=icon.ico delafterreboot.py --name delafterreboot.exe
 
-      - name: Prepare build directory
+      - name: Prepare Installer Directory
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path build
-          Move-Item -Path "dist/delafterreboot.exe" -Destination "build/delafterreboot.exe" -Force
+          New-Item -ItemType Directory -Path installer -Force
+          Move-Item -Path "dist/delafterreboot.exe" -Destination "installer/delafterreboot.exe" -Force
 
-      - name: Move delafterreboot.exe to installer folder
+      # WiX is pre-installed on windows-latest, no need to install it.
+      - name: Build MSI Package
         shell: pwsh
         run: |
-          $installerFolder = "$env:GITHUB_WORKSPACE\installer"
-          if (-not (Test-Path $installerFolder)) { New-Item -ItemType Directory -Path $installerFolder }
-          Move-Item -Path "$env:GITHUB_WORKSPACE\build/delafterreboot.exe" -Destination $installerFolder -Force
+          $arch = '${{ matrix.arch }}'
+          Write-Host "Building MSI for architecture: $arch"
+          
+          # We run from repo root. Passing full relative path to EXE via variable.
+          candle installer\Product-$arch.wxs -ext WixUIExtension -dDelExePath="installer\delafterreboot.exe" -out installer\
+          light installer\Product-$arch.wixobj -ext WixUIExtension -o installer\DelAfterReboot-$arch.msi -b installer
 
-      - name: Install WiX
-        run: choco install wixtoolset --no-progress -y
-
-      - name: Build MSI
-        shell: pwsh
-        run: |
-          Set-Location $env:GITHUB_WORKSPACE
-          if ('${{ matrix.arch }}' -eq 'x64') {
-              $archFlag = 'x64'
-          } else {
-              $archFlag = 'x86'
-          }
-          Write-Host "Building MSI for architecture: $archFlag"
-          candle installer\Product-$archFlag.wxs -ext WixUIExtension -dDelExePath="$env:GITHUB_WORKSPACE\installer\delafterreboot.exe" -out installer\
-          light installer\Product-$archFlag.wixobj -ext WixUIExtension -o installer\DelAfterReboot-${archFlag}.msi -b installer
-
-      - name: Create debug archive on failure
-        if: failure()
-        shell: pwsh
-        run: |
-          $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
-          $zipPath = "debug_${timestamp}_x86x64.zip"
-          Compress-Archive -Path "$env:GITHUB_WORKSPACE" -DestinationPath $zipPath -CompressionLevel Optimal
-          Write-Host "Created debug archive: $zipPath"
-
-      - name: Upload debug artifact on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: debug-workspace-x86x64-${{ github.run_id }}
-          path: debug_*.zip
-          retention-days: 7
-
-      - name: Upload MSI artifact
+      - name: Upload MSI Artifact
         uses: actions/upload-artifact@v4
         with:
           name: DelAfterReboot-msi-${{ matrix.arch }}
@@ -111,61 +82,37 @@ jobs:
           python-version: "3.12"
           architecture: "arm64"
 
-      - name: Install PyInstaller
+      - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
           pip install pyinstaller
 
-      - name: Build delafterreboot.exe for ARM64
+      - name: Build EXE with PyInstaller
         shell: pwsh
         run: |
           pyinstaller --onefile --console --icon=icon.ico delafterreboot.py --name delafterreboot.exe
 
-      - name: Prepare build directory
+      - name: Prepare Installer Directory
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path build
-          Move-Item -Path "dist/delafterreboot.exe" -Destination "build/delafterreboot.exe" -Force
+          New-Item -ItemType Directory -Path installer -Force
+          Move-Item -Path "dist/delafterreboot.exe" -Destination "installer/delafterreboot.exe" -Force
 
-      - name: Move delafterreboot.exe to installer folder
-        shell: pwsh
-        run: |
-          $installerFolder = "$env:GITHUB_WORKSPACE\installer"
-          if (-not (Test-Path $installerFolder)) { New-Item -ItemType Directory -Path $installerFolder }
-          Move-Item -Path "$env:GITHUB_WORKSPACE\build\delafterreboot.exe" -Destination $installerFolder -Force
-
-      - name: Install WiX
+      - name: Install WiX Toolset
         run: choco install wixtoolset --no-progress -y
 
       - name: Build MSI for ARM64
         shell: pwsh
         run: |
-          Move-Item "$env:GITHUB_WORKSPACE\installer\delafterreboot.exe" "$env:GITHUB_WORKSPACE\installer\delafterreboot.exe" -Force
-          Set-Location $env:GITHUB_WORKSPACE
+          # Using absolute path for ARM64 runner as requested
           $wixPath = "C:\Program Files (x86)\WiX Toolset v3.14\bin"
-          Write-Host "== candle.exe =="
-          & "$wixPath\candle.exe" installer\Product-arm64.wxs -ext WixUIExtension -dDelExePath="$env:GITHUB_WORKSPACE\installer\delafterreboot.exe" -out installer\
-          Write-Host "== light.exe =="
+          
+          Write-Host "Building MSI for ARM64 using path: $wixPath"
+          
+          & "$wixPath\candle.exe" installer\Product-arm64.wxs -ext WixUIExtension -dDelExePath="installer\delafterreboot.exe" -out installer\
           & "$wixPath\light.exe" installer\Product-arm64.wixobj -ext WixUIExtension -o installer\DelAfterReboot-arm64.msi -b installer
 
-      - name: Create debug archive on failure
-        if: failure()
-        shell: pwsh
-        run: |
-          $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
-          $zipPath = "debug_${timestamp}_arm64.zip"
-          Compress-Archive -Path "$env:GITHUB_WORKSPACE" -DestinationPath $zipPath -CompressionLevel Optimal
-          Write-Host "Created debug archive: $zipPath"
-
-      - name: Upload debug artifact on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: debug-workspace-arm64-${{ github.run_id }}
-          path: debug_*.zip
-          retention-days: 7
-
-      - name: Upload ARM64 MSI artifact
+      - name: Upload MSI Artifact
         uses: actions/upload-artifact@v4
         with:
           name: DelAfterReboot-msi-arm64
@@ -177,7 +124,6 @@ jobs:
     if: >
       (github.event_name == 'workflow_dispatch' && github.event.inputs.release == 'yes') ||
       (github.event_name == 'push' && contains(github.event.head_commit.message, 'Release'))
-
     steps:
       - uses: actions/checkout@v4
 
@@ -185,16 +131,16 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: dist
+          merge-multiple: true
 
-      - name: Read release info
+      - name: Read Release Info
         id: releaseinfo
         shell: bash
         run: |
-          cd "$GITHUB_WORKSPACE"
           version=$(jq -r '.version // empty' release.json)
           notes=$(jq -r '.notes | join("\n")' release.json)
           if [ -z "$version" ]; then
-            echo "version not found in release.json" >&2
+            echo "Version not found in release.json" >&2
             exit 1
           fi
           echo "VERSION=$version" >> "$GITHUB_ENV"
@@ -204,17 +150,13 @@ jobs:
             echo "EOF"
           } >> "$GITHUB_ENV"
 
-
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ env.VERSION }}
           name: v${{ env.VERSION }}
           body: ${{ env.NOTES }}
-          files: |
-            dist/**/DelAfterReboot-x86.msi
-            dist/**/DelAfterReboot-x64.msi
-            dist/**/DelAfterReboot-arm64.msi
+          files: dist/*.msi
         env:
           GITHUB_TOKEN: ${{ secrets.PUBLISH_TOKEN }}
 
@@ -223,7 +165,7 @@ jobs:
     needs: [build-x86-x64, build-arm64]
     if: always()
     steps:
-      - name: Build notification message
+      - name: Build Notification Message
         id: build_msg
         run: |
           WORKFLOW_NAME="${{ github.workflow }}"
@@ -237,9 +179,11 @@ jobs:
             MESSAGE=$'❌ Workflow *'"${WORKFLOW_NAME}"'* finished with status: *'"${STATUS}"'*\nRepository: '"${REPO}"'\n[View Workflow]('"${URL}"')'
           fi
 
-          printf '%s\n' "message<<EOF" >> "$GITHUB_OUTPUT"
-          printf '%s\n' "$MESSAGE" >> "$GITHUB_OUTPUT"
-          printf '%s\n' "EOF" >> "$GITHUB_OUTPUT"
+          {
+            echo "message<<EOF"
+            echo "$MESSAGE"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Send Telegram Notification
         env:
