@@ -1,12 +1,18 @@
 {
-  "version": "2.5.0",
+  "version": "3.0.0",
   "notes": [
-    "# Release 2.5",
+    "# Release 3.0",
     "",
-    "(New features)",
+    "(Repository updates)",
+    "",
+    "## New in repository",
+    "- Added wiki",
+    "- Added attestations",
+    "- Renamed del.* to delafterreboot.* for clean look",
     "",
     "## New features",
-    "- Added progress bar. Now script is not that boring.",
-    "- Added --cancel command. Now you can cancel what you've done. (But if you reboot, nothing can restore those files)"
+    "- Added --uac command, to avoid breaking scripts",
+    "- Installer now adds install directory to PATH.",
+    "- update.py now accepts version as an argument (or null)"
   ]
 }

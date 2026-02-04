@@ -2,9 +2,9 @@
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
 
   <Product
-    Id="FC58E699-3528-4333-A52E-4010B7750103"
+    Id="78AC59E0-06F4-48C4-83D7-DA14B9F7696F"
     Name="DelAfterReboot"
-    Version="2.5.0"
+    Version="3.0.0"
     Manufacturer="Drygval Artyom"
     UpgradeCode="3aa0f3ee-e4a1-4030-b0b0-0245e4aedb57"
     Language="1033">
@@ -25,20 +25,21 @@
     <UIRef Id="WixUI_InstallDir"/>
     <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER"/>
 
-    <WixVariable Id="WixUILicenseRtf" Value="D:\A\DELAFTERREBOOT\DELAFTERREBOOT\INSTALLER\license.rtf"/>
-    <WixVariable Id="WixUIDialogBmp" Value="D:\A\DELAFTERREBOOT\DELAFTERREBOOT\INSTALLER\banner.bmp"/>
-    <WixVariable Id="WixUIBannerBmp" Value="D:\A\DELAFTERREBOOT\DELAFTERREBOOT\INSTALLER\banner.bmp"/>
+    <Icon Id="AppIcon.ico" SourceFile="icon.ico"/>
+    <Property Id="ARPPRODUCTICON" Value="AppIcon.ico" />
+
+    <WixVariable Id="WixUILicenseRtf" Value="installer\license.rtf"/>
+    <WixVariable Id="WixUIDialogBmp" Value="installer\banner.bmp"/>
+    <WixVariable Id="WixUIBannerBmp" Value="installer\banner.bmp"/>
 
     <Directory Id="TARGETDIR" Name="SourceDir">
       <Directory Id="ProgramFiles64Folder">
         <Directory Id="INSTALLFOLDER" Name="DelAfterReboot">
 
-          <!-- EXE -->
           <Component Id="DelExe" Guid="570d7ff7-4e1c-40f8-8ac8-b9961d4ffb62" Win64="yes">
-            <File Source="D:\A\DELAFTERREBOOT\DELAFTERREBOOT\INSTALLER\del.exe" KeyPath="yes"/>
+            <File Source="$(var.DelExePath)" KeyPath="yes"/>
           </Component>
 
-          <!-- Install path in registry -->
           <Component Id="RegAndEnv" Guid="fde741b4-562b-457f-82b0-65328adbbba6" Win64="yes">
             <RegistryKey Root="HKLM" Key="Software\DelAfterReboot">
               <RegistryValue
@@ -47,27 +48,32 @@
                 Value="[INSTALLFOLDER]"
                 KeyPath="yes"/>
             </RegistryKey>
+            <Environment
+              Id="AddToPath"
+              Name="PATH"
+              Value="[INSTALLFOLDER]"
+              Permanent="no"
+              Part="last"
+              Action="set"
+              System="yes"/>
           </Component>
 
-          <!-- Context menu -->
           <Component Id="ContextMenu" Guid="c6c75802-19d7-4e1f-8bd2-eb409e94e320" Win64="yes">
-
             <RegistryKey
               Root="HKLM"
               Key="Software\Classes\Directory\shell\DelAfterReboot">
               <RegistryValue Type="string" Value="DelAfterReboot" KeyPath="yes"/>
               <RegistryValue Name="HasLUAShield" Type="string" Value=""/>
-              <RegistryValue Name="Icon" Type="expandable" Value="[INSTALLFOLDER]del.exe,0"/>
+              <RegistryValue Name="Icon" Type="expandable" Value="[INSTALLFOLDER]delafterreboot.exe,0"/>
             </RegistryKey>
 
             <RegistryKey
               Root="HKLM"
               Key="Software\Classes\Directory\shell\DelAfterReboot\command">
               <RegistryValue
-				Type="expandable"
-				Value='"[INSTALLFOLDER]del.exe" "%1"'/>
+                Type="expandable"
+                Value='"[INSTALLFOLDER]delafterreboot.exe" "%1" --uac'/>
             </RegistryKey>
-
           </Component>
 
         </Directory>
@@ -82,3 +88,4 @@
 
   </Product>
 </Wix>
+

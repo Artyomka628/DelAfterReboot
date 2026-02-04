@@ -2,8 +2,7 @@ Windows Registry Editor Version 5.00
 
 [HKEY_CLASSES_ROOT\Directory\shell\DelAfterReboot]
 @="DelAfterReboot"
-"Icon"="%ProgramFiles%\\DelAfterReboot\\del.exe,0"
+"Icon"="%ProgramFiles%\\DelAfterReboot\\delafterreboot.exe,0"
 
 [HKEY_CLASSES_ROOT\Directory\shell\DelAfterReboot\command]
-@="\"%ProgramFiles%\\DelAfterReboot\\del.exe\" \"%1\""
-
+@="\"%ProgramFiles%\\DelAfterReboot\\delafterreboot.exe\" --uac \"%1\""

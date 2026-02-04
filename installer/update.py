@@ -1,13 +1,18 @@
 import os
 import uuid
 import re
+import sys
 
 folder = os.path.dirname(os.path.abspath(__file__))
 
 def new_guid():
     return str(uuid.uuid4()).upper()
 
-new_version = input("Enter new version (leave empty to keep current): ").strip()
+new_version = None
+if len(sys.argv) > 1:
+    arg_value = sys.argv[1].strip()
+    if arg_value and arg_value.lower() != "null":
+        new_version = arg_value
 
 for filename in os.listdir(folder):
     if filename.endswith(".wxs"):
@@ -33,5 +38,3 @@ for filename in os.listdir(folder):
             f.write(content)
 
         print(f"{filename}: {product_id}")
-
-input()

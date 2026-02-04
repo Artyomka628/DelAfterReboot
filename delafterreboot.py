@@ -20,23 +20,30 @@ def show_log(title="DEBUG LOG"):
     except Exception:
         print(text)
 
-def ensure_admin():
+def ensure_admin(force_uac=False):
     try:
-        is_admin = ctypes.windll.shell32.IsUserAnAdmin()
+        is_admin = bool(ctypes.windll.shell32.IsUserAnAdmin())
     except Exception:
         is_admin = False
 
-    if not is_admin:
-        script = os.path.abspath(sys.argv[0])
-        try:
-            exe_abs = os.path.abspath(sys.executable)
-            if exe_abs.lower() == script.lower() or getattr(sys, "frozen", False):
-                params = " ".join(f'"{arg}"' for arg in sys.argv[1:])
-            else:
-                params = " ".join(f'"{arg}"' for arg in [script] + sys.argv[1:])
-        except Exception:
-            params = " ".join(f'"{arg}"' for arg in [script] + sys.argv[1:])
+    if is_admin:
+        return True
 
+    if not force_uac:
+        return False
+
+    script = os.path.abspath(sys.argv[0])
+    try:
+        exe_abs = os.path.abspath(sys.executable)
+        args_for_restart = [arg for arg in sys.argv[1:] if arg != "--uac"]
+        if exe_abs.lower() == script.lower() or getattr(sys, "frozen", False):
+            params = " ".join(f'"{arg}"' for arg in args_for_restart)
+        else:
+            params = " ".join(f'"{arg}"' for arg in [script] + args_for_restart)
+    except Exception:
+        params = " ".join(f'"{arg}"' for arg in [script] + [arg for arg in sys.argv[1:] if arg != "--uac"])
+
+    try:
         ctypes.windll.shell32.ShellExecuteW(
             None,
             "runas",
@@ -45,7 +52,11 @@ def ensure_admin():
             None,
             1
         )
-        sys.exit(0)
+    except Exception as e:
+        print(f"Failed to request elevation: {e}")
+        return False
+
+    sys.exit(0)
 
 def is_admin():
     try:
@@ -183,25 +194,29 @@ def clear_pending_delete():
 def main():
     global _use_debug
 
-    ensure_admin()
+    args = sys.argv[1:]
+    force_uac = "--uac" in args
+    debug_flag = "--debug" in args
 
-    if not is_admin():
+    if debug_flag:
+        _use_debug = True
+        builtins.print = _print_hook
+
+    if not ensure_admin(force_uac=force_uac):
         print("Error: administrator privileges are required.")
+        print("Use --uac to request elevation.")
         if _use_debug:
             show_log()
         sys.exit(1)
 
-    if len(sys.argv) < 2:
-        print("Usage: python del.py <folder_path> [--debug]  or  python del.py --cancel [--debug]")
+    if len(args) == 0:
+        print("Usage: python delafterreboot.py <folder_path> [--debug] [--uac]  or  python delafterreboot.py --cancel [--debug] [--uac]")
         print("--debug - debug print with MessageBox")
         print("--cancel - clear PendingFileRenameOperations (cancel pending deletes)")
+        print("--uac - request elevation via UAC if not running as admin")
         sys.exit(2)
 
-    if sys.argv[1] == "--cancel":
-        if len(sys.argv) > 2 and sys.argv[2] == "--debug":
-            _use_debug = True
-            builtins.print = _print_hook
-
+    if "--cancel" in args:
         try:
             clear_pending_delete()
         except Exception as e:
@@ -214,11 +229,15 @@ def main():
             show_log()
         sys.exit(0)
 
-    folder = sys.argv[1]
+    folder = None
+    for a in args:
+        if not a.startswith("--"):
+            folder = a
+            break
 
-    if len(sys.argv) > 2 and sys.argv[2] == "--debug":
-        _use_debug = True
-        builtins.print = _print_hook
+    if not folder:
+        print("Error: no folder specified.")
+        sys.exit(2)
 
     if not os.path.isdir(folder):
         print("Error: specified path does not exist or is not a directory.")
