@@ -1,13 +1,18 @@
 {
-  "version": "2.7.0",
+  "version": "3.0.0",
   "notes": [
-    "# Release 2.7",
+    "# Release 3.0",
     "",
-    "(Updates)",
+    "(Repository updates)",
     "",
-    "## Updates",
-    "- Renamed executable to delafterreboot.exe across docs and installers.",
+    "## New in repository",
+    "- Added wiki",
+    "- Added attestations",
+    "- Renamed del.* to delafterreboot.* for clean look",
+    "",
+    "## New features",
+    "- Added --uac command, to avoid breaking scripts",
     "- Installer now adds install directory to PATH.",
-    "- update.py now accepts version as an argument (use \"null\" to keep current)."
+    "- update.py now accepts version as an argument (or null)"
   ]
 }
