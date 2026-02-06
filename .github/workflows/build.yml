@@ -24,7 +24,7 @@ permissions:
   contents: read
 
 jobs:
-  build-x86-x64:
+  build-and-release:
     runs-on: windows-latest
     strategy:
       fail-fast: false
@@ -32,44 +32,84 @@ jobs:
         include:
           - arch: x86
             msystem: MINGW32
-            mingw_package: mingw-w64-i686-gcc
+            compiler: gcc
           - arch: x64
             msystem: MINGW64
-            mingw_package: mingw-w64-x86_64-gcc
+            compiler: gcc
+          - arch: arm64
+            msystem: MINGW64
+            compiler: aarch64-clang
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup MSYS2
-        uses: msys2/setup-msys2@v2
-        with:
-          msystem: ${{ matrix.msystem }}
-          update: true
-          install: ${{ matrix.mingw_package }}
-
-      - name: Build EXE with MinGW-w64
-        shell: msys2 {0}
+      - name: Setup MSYS2 / llvm-mingw
+        shell: pwsh
         run: |
-          mkdir -p dist
-          g++ -std=c++17 -O2 -s -static -static-libgcc -static-libstdc++ -municode delafterreboot.cpp -o dist/delafterreboot.exe -ladvapi32 -lshell32 -luser32
+          if ('${{ matrix.arch }}' -eq 'arm64') {
+            $api = "https://api.github.com/repos/mstorsjo/llvm-mingw/releases/latest"
+            $release = Invoke-RestMethod $api
+            $asset = $release.assets | Where-Object { $_.name -like "*aarch64*ucrt.zip" }
+            if (-not $asset) { Write-Error "ARM64 llvm-mingw not found"; exit 1 }
+            $zipPath = Join-Path $env:RUNNER_TEMP $asset.name
+            Invoke-WebRequest $asset.browser_download_url -OutFile $zipPath
+            Expand-Archive $zipPath -DestinationPath $env:RUNNER_TEMP -Force
+            $toolchainDir = Join-Path $env:RUNNER_TEMP ($asset.name -replace ".zip","")
+            Add-Content $env:GITHUB_PATH "$toolchainDir\bin"
+          } else {
+            # MSYS2 для x86/x64
+            Invoke-Expression "iex ((New-Object System.Net.WebClient).DownloadString('https://raw.githubusercontent.com/msys2/setup-msys2/master/setup-msys2.ps1'))"
+            pacman -Syu --noconfirm
+            pacman -S --noconfirm $([System.String]::Format('mingw-w64-{0}-gcc', if ('${{ matrix.arch }}' -eq 'x86'){ 'i686' } else { 'x86_64' }))
+          }
+
+      - name: Generate version header without Python
+        shell: pwsh
+        run: |
+          $version = "unknown"
+          $commit = "unknown"
+          $date = (Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ")
+
+          if (Test-Path release.json) {
+              $json = Get-Content release.json | ConvertFrom-Json
+              if ($json.version) { $version = $json.version }
+          }
+          try { $commit = git rev-parse --short HEAD } catch {}
+          
+          "pragma once" | Out-File version.h -Encoding utf8
+          "#define APP_VERSION `"$version`"" | Out-File version.h -Append -Encoding utf8
+          "#define GIT_COMMIT_HASH `"$commit`"" | Out-File version.h -Append -Encoding utf8
+          "#define BUILD_DATE `"$date`"" | Out-File version.h -Append -Encoding utf8
+
+      - name: Build EXE
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path dist -Force | Out-Null
+          
+          if ('${{ matrix.arch }}' -eq 'arm64') {
+            aarch64-w64-mingw32-clang++ -std=c++17 -O2 -s -static -static-libgcc -static-libstdc++ -municode delafterreboot.cpp -o dist/delafterreboot.exe -ladvapi32 -lshell32 -luser32
+          } else {
+            if ('${{ matrix.arch }}' -eq 'x86') { $msysbin="C:/msys64/mingw32/bin" } else { $msysbin="C:/msys64/mingw64/bin" }
+            & "$msysbin/g++.exe" -std=c++17 -O2 -s -static -static-libgcc -static-libstdc++ -municode delafterreboot.cpp -o dist/delafterreboot.exe -ladvapi32 -lshell32 -luser32
+          }
 
       - name: Prepare Installer Directory
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Path installer -Force
+          New-Item -ItemType Directory -Path installer -Force | Out-Null
           Move-Item -Path "dist/delafterreboot.exe" -Destination "installer/delafterreboot.exe" -Force
 
-      # WiX is pre-installed on windows-latest, no need to install it.
-      - name: Build MSI Package
+      - name: Install WiX Toolset
+        run: choco install wixtoolset --no-progress -y
+
+      - name: Build MSI
         shell: pwsh
         run: |
+          $wixPath = "C:\Program Files (x86)\WiX Toolset v3.14\bin"
           $arch = '${{ matrix.arch }}'
-          Write-Host "Building MSI for architecture: $arch"
-          
-          # We run from repo root. Passing full relative path to EXE via variable.
-          candle installer\Product-$arch.wxs -ext WixUIExtension -dDelExePath="installer\delafterreboot.exe" -out installer\
-          light installer\Product-$arch.wixobj -ext WixUIExtension -o installer\DelAfterReboot-$arch.msi -b installer
-      
+          & "$wixPath\candle.exe" "installer\Product-$arch.wxs" -ext WixUIExtension -dDelExePath="installer\delafterreboot.exe" -out "installer\$arch.wixobj"
+          & "$wixPath\light.exe" "installer\$arch.wixobj" -ext WixUIExtension -o "installer\DelAfterReboot-$arch.msi" -b installer
+
       - name: Attest MSI provenance
         if: >
           (github.event_name == 'workflow_dispatch' && github.event.inputs.release == 'yes') ||
@@ -77,143 +117,25 @@ jobs:
         uses: actions/attest-build-provenance@v1
         with:
           subject-path: installer/DelAfterReboot-${{ matrix.arch }}.msi
-          
+
       - name: Upload MSI Artifact
         uses: actions/upload-artifact@v4
         with:
           name: DelAfterReboot-msi-${{ matrix.arch }}
           path: installer/DelAfterReboot-${{ matrix.arch }}.msi
 
-  build-arm64:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install llvm-mingw (ARM64)
-        shell: pwsh
-        run: |
-          $version = "20231011"
-          $zipName = "llvm-mingw-$version-ucrt-x86_64.zip"
-          $url = "https://github.com/mstorsjo/llvm-mingw/releases/download/$version/$zipName"
-          $zipPath = Join-Path $env:RUNNER_TEMP $zipName
-          Invoke-WebRequest -Uri $url -OutFile $zipPath
-          Expand-Archive -Path $zipPath -DestinationPath $env:RUNNER_TEMP -Force
-          $toolchain = Join-Path $env:RUNNER_TEMP "llvm-mingw-$version-ucrt-x86_64"
-          Add-Content $env:GITHUB_PATH "$toolchain\\bin"
-
-      - name: Build EXE with llvm-mingw (ARM64)
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Path dist -Force | Out-Null
-          aarch64-w64-mingw32-clang++ -std=c++17 -O2 -s -static -static-libgcc -static-libstdc++ -municode delafterreboot.cpp -o dist/delafterreboot.exe -ladvapi32 -lshell32 -luser32
-
-      - name: Prepare Installer Directory
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Path installer -Force
-          Move-Item -Path "dist/delafterreboot.exe" -Destination "installer/delafterreboot.exe" -Force
-
-      - name: Install WiX Toolset
-        run: choco install wixtoolset --no-progress -y
-
-      - name: Build MSI for ARM64
-        shell: pwsh
-        run: |
-          $wixPath = "C:\Program Files (x86)\WiX Toolset v3.14\bin"
-          
-          Write-Host "Building MSI for ARM64 using path: $wixPath"
-          
-          & "$wixPath\candle.exe" installer\Product-arm64.wxs -ext WixUIExtension -dDelExePath="installer\delafterreboot.exe" -out installer\
-          & "$wixPath\light.exe" installer\Product-arm64.wixobj -ext WixUIExtension -o installer\DelAfterReboot-arm64.msi -b installer
-     
-      - name: Attest MSI provenance (ARM64)
+      - name: Create GitHub Release & Notify
         if: >
           (github.event_name == 'workflow_dispatch' && github.event.inputs.release == 'yes') ||
           (github.event_name == 'push' && contains(github.event.head_commit.message, 'Release'))
-        uses: actions/attest-build-provenance@v1
-        with:
-          subject-path: installer/DelAfterReboot-arm64.msi
-          
-      - name: Upload MSI Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: DelAfterReboot-msi-arm64
-          path: installer/DelAfterReboot-arm64.msi
-
-  release:
-    runs-on: ubuntu-latest
-    needs: [build-x86-x64, build-arm64]
-    if: >
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.release == 'yes') ||
-      (github.event_name == 'push' && contains(github.event.head_commit.message, 'Release'))
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Download all MSI artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: dist
-          merge-multiple: true
-
-      - name: Read Release Info
-        id: releaseinfo
-        shell: bash
+        shell: pwsh
         run: |
-          version=$(jq -r '.version // empty' release.json)
-          notes=$(jq -r '.notes | join("\n")' release.json)
-          if [ -z "$version" ]; then
-            echo "Version not found in release.json" >&2
-            exit 1
-          fi
-          echo "VERSION=$version" >> "$GITHUB_ENV"
-          {
-            echo "NOTES<<EOF"
-            echo "$notes"
-            echo "EOF"
-          } >> "$GITHUB_ENV"
+          $version = (Get-Content release.json | ConvertFrom-Json).version
+          $notes = (Get-Content release.json | ConvertFrom-Json).notes -join "`n"
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v${{ env.VERSION }}
-          name: v${{ env.VERSION }}
-          body: ${{ env.NOTES }}
-          files: dist/*.msi
-        env:
-          GITHUB_TOKEN: ${{ secrets.PUBLISH_TOKEN }}
+          gh release create "v$version" "installer/DelAfterReboot-*.msi" --title "v$version" --notes "$notes"
 
-  notify:
-    runs-on: ubuntu-latest
-    needs: [build-x86-x64, build-arm64]
-    if: always()
-    steps:
-      - name: Build Notification Message
-        id: build_msg
-        run: |
-          WORKFLOW_NAME="${{ github.workflow }}"
-          REPO="${{ github.repository }}"
-          STATUS="${{ needs.build-x86-x64.result }}-${{ needs.build-arm64.result }}"
-          URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-
-          if [[ "$STATUS" == "success-success" ]]; then
-            MESSAGE=$'✅ Workflow *'"${WORKFLOW_NAME}"'* completed successfully.\nRepository: '"${REPO}"'\n[View Workflow]('"${URL}"')'
-          else
-            MESSAGE=$'❌ Workflow *'"${WORKFLOW_NAME}"'* finished with status: *'"${STATUS}"'*\nRepository: '"${REPO}"'\n[View Workflow]('"${URL}"')'
-          fi
-
-          {
-            echo "message<<EOF"
-            echo "$MESSAGE"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
-
-      - name: Send Telegram Notification
-        env:
-          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
-          MESSAGE: ${{ steps.build_msg.outputs.message }}
-        run: |
-          curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
-            -d chat_id="${TELEGRAM_CHAT}" \
-            --data-urlencode "text=${MESSAGE}" \
-            -d parse_mode="Markdown"
+          # Telegram notification
+          $status = if ($LASTEXITCODE -eq 0) { "✅ Build & Release succeeded" } else { "❌ Build failed" }
+          $message = "Repository: $env:GITHUB_REPOSITORY`nWorkflow: $env:GITHUB_WORKFLOW`nStatus: $status`n[View Run]($env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID)"
+          Invoke-RestMethod -Method Post -Uri "https://api.telegram.org/bot$($env:TELEGRAM_BOT_TOKEN)/sendMessage" -Body @{ chat_id = $env:TELEGRAM_CHAT_ID; text = $message; parse_mode = "Markdown" }

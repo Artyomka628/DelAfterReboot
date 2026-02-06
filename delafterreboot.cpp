@@ -11,10 +11,51 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include "version.h"
 
 namespace {
 std::vector<std::wstring> g_print_log;
 bool g_use_debug = false;
+
+#ifndef APP_VERSION
+#define APP_VERSION "unknown"
+#endif
+#ifndef GIT_COMMIT_HASH
+#define GIT_COMMIT_HASH "unknown"
+#endif
+#ifndef BUILD_DATE
+#define BUILD_DATE "unknown"
+#endif
+
+static std::wstring widen(const char *s) {
+    std::wstring out;
+    while (s && *s) {
+        out.push_back(static_cast<wchar_t>(*s++));
+    }
+    return out;
+}
+
+static void PrintVersion() {
+    PrintLine(L"Version: " + widen(APP_VERSION));
+    PrintLine(L"Commit:  " + widen(GIT_COMMIT_HASH));
+    PrintLine(L"Built:   " + widen(BUILD_DATE));
+}
+
+static void PrintHelp() {
+    PrintLine(L"Usage:");
+    PrintLine(L"  delafterreboot.exe <folder_path> [--debug] [--uac]");
+    PrintLine(L"  delafterreboot.exe --cancel [--debug] [--uac]");
+    PrintLine(L"");
+    PrintLine(L"Options:");
+    PrintLine(L"  --help      Show this help");
+    PrintLine(L"  --version   Show version information");
+    PrintLine(L"  --debug     Debug output using MessageBox");
+    PrintLine(L"  --cancel    Clear PendingFileRenameOperations");
+    PrintLine(L"  --uac       Request elevation via UAC");
+    PrintLine(L"");
+    PrintVersion();
+}
+
 
 void PrintLine(const std::wstring &text) {
     if (g_use_debug) {
@@ -335,6 +376,17 @@ int wmain(int argc, wchar_t *argv[]) {
     }
 
     std::vector<std::wstring> flags(args.begin() + 1, args.end());
+
+    if (std::find(flags.begin(), flags.end(), L"--help") != flags.end()) {
+        PrintHelp();
+        return 0;
+    }
+
+    if (std::find(flags.begin(), flags.end(), L"--version") != flags.end()) {
+        PrintVersion();
+        return 0;
+    }
+
     bool force_uac = std::find(flags.begin(), flags.end(), L"--uac") != flags.end();
     bool debug_flag = std::find(flags.begin(), flags.end(), L"--debug") != flags.end();
 
