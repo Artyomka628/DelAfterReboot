@@ -15,7 +15,8 @@ on:
     branches:
       - main
     paths:
-      - 'delafterreboot.py'
+      - 'delafterreboot.cpp'
+      - '.github/workflows/build.yml'
 
 permissions:
   id-token: write
@@ -30,28 +31,27 @@ jobs:
       matrix:
         include:
           - arch: x86
-            python: "3.8"
+            msystem: MINGW32
+            mingw_package: mingw-w64-i686-gcc
           - arch: x64
-            python: "3.12"
+            msystem: MINGW64
+            mingw_package: mingw-w64-x86_64-gcc
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - name: Setup MSYS2
+        uses: msys2/setup-msys2@v2
         with:
-          python-version: ${{ matrix.python }}
-          architecture: ${{ matrix.arch }}
+          msystem: ${{ matrix.msystem }}
+          update: true
+          install: ${{ matrix.mingw_package }}
 
-      - name: Install Dependencies
+      - name: Build EXE with MinGW-w64
+        shell: msys2 {0}
         run: |
-          python -m pip install --upgrade pip
-          pip install pyinstaller
-
-      - name: Build EXE with PyInstaller
-        shell: pwsh
-        run: |
-          pyinstaller --onefile --console --icon=icon.ico delafterreboot.py --name delafterreboot.exe
+          mkdir -p dist
+          g++ -std=c++17 -O2 -s -static -static-libgcc -static-libstdc++ -municode delafterreboot.cpp -o dist/delafterreboot.exe -ladvapi32 -lshell32 -luser32
 
       - name: Prepare Installer Directory
         shell: pwsh
@@ -85,25 +85,27 @@ jobs:
           path: installer/DelAfterReboot-${{ matrix.arch }}.msi
 
   build-arm64:
-    runs-on: windows-11-arm
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Python ARM64
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          architecture: "arm64"
-
-      - name: Install Dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install pyinstaller
-
-      - name: Build EXE with PyInstaller
+      - name: Install llvm-mingw (ARM64)
         shell: pwsh
         run: |
-          pyinstaller --onefile --console --icon=icon.ico delafterreboot.py --name delafterreboot.exe
+          $version = "20231011"
+          $zipName = "llvm-mingw-$version-ucrt-x86_64.zip"
+          $url = "https://github.com/mstorsjo/llvm-mingw/releases/download/$version/$zipName"
+          $zipPath = Join-Path $env:RUNNER_TEMP $zipName
+          Invoke-WebRequest -Uri $url -OutFile $zipPath
+          Expand-Archive -Path $zipPath -DestinationPath $env:RUNNER_TEMP -Force
+          $toolchain = Join-Path $env:RUNNER_TEMP "llvm-mingw-$version-ucrt-x86_64"
+          Add-Content $env:GITHUB_PATH "$toolchain\\bin"
+
+      - name: Build EXE with llvm-mingw (ARM64)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path dist -Force | Out-Null
+          aarch64-w64-mingw32-clang++ -std=c++17 -O2 -s -static -static-libgcc -static-libstdc++ -municode delafterreboot.cpp -o dist/delafterreboot.exe -ladvapi32 -lshell32 -luser32
 
       - name: Prepare Installer Directory
         shell: pwsh
@@ -117,7 +119,6 @@ jobs:
       - name: Build MSI for ARM64
         shell: pwsh
         run: |
-          # Using absolute path for ARM64 runner as requested
           $wixPath = "C:\Program Files (x86)\WiX Toolset v3.14\bin"
           
           Write-Host "Building MSI for ARM64 using path: $wixPath"
