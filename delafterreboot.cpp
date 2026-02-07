@@ -35,7 +35,7 @@ static std::wstring widen(const char *s) {
     return out;
 }
 
-// forward declaration to allow using PrintLine in PrintVersion/PrintHelp
+// forward declaration
 void PrintLine(const std::wstring &text);
 
 static void PrintVersion() {
@@ -58,7 +58,6 @@ static void PrintHelp() {
     PrintLine(L"");
     PrintVersion();
 }
-
 
 void PrintLine(const std::wstring &text) {
     if (g_use_debug) {
@@ -369,7 +368,7 @@ void ClearPendingDelete() {
 
     RegCloseKey(reg_key);
 }
-}
+} // anonymous namespace
 
 int wmain(int argc, wchar_t *argv[]) {
     std::vector<std::wstring> args;
@@ -378,7 +377,10 @@ int wmain(int argc, wchar_t *argv[]) {
         args.emplace_back(argv[i]);
     }
 
-    std::vector<std::wstring> flags(args.begin() + 1, args.end());
+    std::vector<std::wstring> flags;
+    if (argc > 1) {
+        flags.assign(args.begin() + 1, args.end());
+    }
 
     if (std::find(flags.begin(), flags.end(), L"--help") != flags.end()) {
         PrintHelp();
@@ -476,3 +478,21 @@ int wmain(int argc, wchar_t *argv[]) {
         std::chrono::steady_clock::now() - start_time);
 
     PrintLine(L"\n=================");
+    {
+        std::wstringstream line;
+        line << L"Marked: " << paths.size() << L" files";
+        PrintLine(line.str());
+    }
+    {
+        std::wstringstream line;
+        line << L"Elapsed Time: " << std::fixed << std::setprecision(2) << elapsed.count() << L" seconds";
+        PrintLine(line.str());
+    }
+    PrintLine(L"=================");
+
+    if (g_use_debug) {
+        ShowLog(args);
+    }
+
+    return 0;
+}
