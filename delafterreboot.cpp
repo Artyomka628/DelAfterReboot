@@ -185,7 +185,14 @@ void CollectPathsRecursive(const std::wstring &root_path,
     search_path += L"*";
 
     WIN32_FIND_DATAW find_data;
-    HANDLE handle = FindFirstFileW(search_path.c_str(), &find_data);
+    HANDLE handle = FindFirstFileExW(
+        search_path.c_str(),
+        FindExInfoBasic,
+        &find_data,
+        FindExSearchNameMatch,
+        nullptr,
+        FIND_FIRST_EX_LARGE_FETCH
+    );
     if (handle == INVALID_HANDLE_VALUE) {
         return;
     }
@@ -278,34 +285,23 @@ void WritePendingDelete(const std::vector<std::wstring> &paths, bool show_progre
     auto start_time = std::chrono::steady_clock::now();
     const int bar_length = 25;
 
-    if (show_progress) {
-        std::wcout << L"\n" << std::flush;
-    }
-
+    // НЕ печатаем пустую строку перед прогрессом — чтобы отступы были ровные
+    auto last_draw = start_time;
     size_t index = 0;
     for (const auto &path : paths) {
         ++index;
-        DWORD full_len = GetFullPathNameW(path.c_str(), 0, nullptr, nullptr);
-        std::wstring abs_path;
-        if (full_len > 0) {
-            abs_path.resize(full_len + 1);
-            DWORD actual = GetFullPathNameW(path.c_str(), static_cast<DWORD>(abs_path.size()), abs_path.data(), nullptr);
-            if (actual > 0) {
-                abs_path.resize(actual);
-            } else {
-                abs_path = path;
-            }
-        } else {
-            abs_path = path;
-        }
 
-        std::wstring nt_path = L"\\\\??\\" + abs_path;
+        // путь у нас уже абсолютный; не вызывать GetFullPathNameW на каждый файл
+        std::wstring nt_path = L"\\\\??\\" + path;
         entries.push_back(nt_path);
         entries.push_back(L"");
 
-        if (show_progress) {
-            auto elapsed = std::chrono::duration_cast<std::chrono::duration<double>>(
-                std::chrono::steady_clock::now() - start_time);
+        auto now = std::chrono::steady_clock::now();
+        if (show_progress &&
+            std::chrono::duration_cast<std::chrono::milliseconds>(now - last_draw).count() >= 80) {
+            last_draw = now;
+
+            auto elapsed = std::chrono::duration_cast<std::chrono::duration<double>>(now - start_time);
             double avg = elapsed.count() / static_cast<double>(index);
             double remain = avg * static_cast<double>(paths.size() - index);
             std::wstring rem_str = FormatSeconds(remain);
@@ -324,7 +320,7 @@ void WritePendingDelete(const std::vector<std::wstring> &paths, bool show_progre
     }
 
     if (show_progress) {
-        std::wcout << L"\n" << std::flush;
+        std::wcout << L"\n" << std::flush; // ровно 1 пустая строка после прогресса
     }
 
     size_t total_chars = 1;
@@ -409,10 +405,8 @@ int wmain(int argc, wchar_t *argv[]) {
     }
 
     if (flags.empty()) {
-        PrintLine(L"Usage: delafterreboot.exe <folder_path> [--debug] [--uac]  or  delafterreboot.exe --cancel [--debug] [--uac]");
-        PrintLine(L"--debug - debug print with MessageBox");
-        PrintLine(L"--cancel - clear PendingFileRenameOperations (cancel pending deletes)");
-        PrintLine(L"--uac - request elevation via UAC if not running as admin");
+        // делаем одинаково с --help
+        PrintHelp();
         return 2;
     }
 
@@ -477,7 +471,8 @@ int wmain(int argc, wchar_t *argv[]) {
     auto elapsed = std::chrono::duration_cast<std::chrono::duration<double>>(
         std::chrono::steady_clock::now() - start_time);
 
-    PrintLine(L"\n=================");
+    PrintLine(L"=================");
+
     {
         std::wstringstream line;
         line << L"Marked: " << paths.size() << L" files";
