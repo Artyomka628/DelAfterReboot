@@ -99,7 +99,8 @@ msys2 -c "pacman -S mingw-w64-x86_64-gcc --noconfirm"
 ```bash
 rm -rf dist
 mkdir -p dist
-g++ -std=c++17 -O2 -s -static -static-libgcc -static-libstdc++ -municode delafterreboot.cpp -o dist/delafterreboot.exe -ladvapi32 -lshell32 -luser32
+windres icon.rc -O coff -o icon.o
+g++ -std=c++17 -O2 -s -static -static-libgcc -static-libstdc++ -municode delafterreboot.cpp icon.o -o dist/delafterreboot.exe -ladvapi32 -lshell32 -luser32
 ```
 
 #### For ARM64 (64-bit ARM)
@@ -110,7 +111,8 @@ g++ -std=c++17 -O2 -s -static -static-libgcc -static-libstdc++ -municode delafte
 ```powershell
 rm -Force -Recurse dist -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Path dist -Force | Out-Null
-aarch64-w64-mingw32-clang++ -std=c++17 -O2 -s -static -static-libgcc -static-libstdc++ -municode delafterreboot.cpp -o dist/delafterreboot.exe -ladvapi32 -lshell32 -luser32
+aarch64-w64-mingw32-windres icon.rc -O coff -o icon.o
+aarch64-w64-mingw32-clang++ -std=c++17 -O2 -s -static -static-libgcc -static-libstdc++ -municode delafterreboot.cpp icon.o -o dist/delafterreboot.exe -ladvapi32 -lshell32 -luser32
 ```
 
 After building, you should have `dist\delafterreboot.exe`.
