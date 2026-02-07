@@ -1,18 +1,19 @@
 {
-  "version": "3.0.0",
+  "version": "4.0.0",
   "notes": [
-    "# Release 3.0",
+    "# Release 4.0",
     "",
-    "(Repository updates)",
+    "(Moved to c++)",
     "",
     "## New in repository",
-    "- Added wiki",
-    "- Added attestations",
-    "- Renamed del.* to delafterreboot.* for clean look",
+    "- Added info for moving to c++ in wiki",
+    "- Better view in installer folder",
+	"- Rewrote build.yml",
+	"- Rewrote readme",
     "",
     "## New features",
-    "- Added --uac command, to avoid breaking scripts",
-    "- Installer now adds install directory to PATH.",
+    "- Added --help command, to view all avaliable commands",
+    "- Added --version command, to view version",
     "- update.py now accepts version as an argument (or null)"
   ]
 }

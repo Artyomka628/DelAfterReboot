@@ -15,7 +15,8 @@ on:
     branches:
       - main
     paths:
-      - 'delafterreboot.py'
+      - 'delafterreboot.cpp'
+      - '.github/workflows/build.yml'
 
 permissions:
   id-token: write
@@ -23,53 +24,130 @@ permissions:
   contents: read
 
 jobs:
-  build-x86-x64:
-    runs-on: windows-latest
+  build:
+    name: Build (matrix)
     strategy:
       fail-fast: false
       matrix:
         include:
           - arch: x86
-            python: "3.8"
+            msystem: MINGW32
+            mingw_package: mingw-w64-i686-gcc
+            runner: windows-latest
           - arch: x64
-            python: "3.12"
+            msystem: MINGW64
+            mingw_package: mingw-w64-x86_64-gcc
+            runner: windows-latest
+          - arch: arm64
+            msystem: ""
+            mingw_package: ""
+            runner: windows-11-arm
+    runs-on: ${{ matrix.runner }}
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - name: Setup MSYS2 (x86/x64)
+        if: ${{ matrix.arch != 'arm64' }}
+        uses: msys2/setup-msys2@v2
         with:
-          python-version: ${{ matrix.python }}
-          architecture: ${{ matrix.arch }}
+          msystem: ${{ matrix.msystem }}
+          update: true
+          install: ${{ matrix.mingw_package }}
 
-      - name: Install Dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install pyinstaller
-
-      - name: Build EXE with PyInstaller
+      - name: Setup llvm-mingw (arm64)
+        if: ${{ matrix.arch == 'arm64' }}
         shell: pwsh
         run: |
-          pyinstaller --onefile --console --icon=icon.ico delafterreboot.py --name delafterreboot.exe
+          # download a known release; change URL if you need different version
+          $url = "https://github.com/mstorsjo/llvm-mingw/releases/download/20240130/llvm-mingw-20240130-ucrt-aarch64.zip"
+          $zip = "llvm-mingw-aarch64.zip"
+          Invoke-WebRequest -Uri $url -OutFile $zip
+          Expand-Archive -Path $zip -DestinationPath llvm-mingw -Force
+          Remove-Item -Path $zip -Force
+
+          # find directory that contains bin
+          $binDir = Get-ChildItem -Path .\llvm-mingw -Directory -Recurse -ErrorAction SilentlyContinue | Where-Object { Test-Path (Join-Path $_.FullName 'bin') } | Select-Object -First 1
+          if ($binDir) {
+            $binPath = Join-Path $binDir.FullName 'bin'
+          } else {
+            $binPath = (Resolve-Path .\llvm-mingw\* | Select-Object -First 1).Path + '\bin'
+          }
+
+          Write-Host "Toolchain bin path: $binPath"
+          Add-Content -Path $env:GITHUB_ENV -Value "PATH=$binPath`;$env:PATH"
+
+      - name: Generate version header (PowerShell)
+        shell: pwsh
+        run: |
+          $version = "unknown"
+          $commit = "unknown"
+          $date = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+
+          if (Test-Path "release.json") {
+            try {
+              $json = Get-Content release.json -Raw | ConvertFrom-Json
+              if ($json.version) { $version = $json.version }
+            } catch {}
+          }
+
+          try { $commit = git rev-parse --short HEAD } catch {}
+
+          $content = @()
+          $content += '#pragma once'
+          $content += "#define APP_VERSION `"$version`""
+          $content += "#define GIT_COMMIT_HASH `"$commit`""
+          $content += "#define BUILD_DATE `"$date`""
+          $content -join "`n" | Out-File -FilePath version.h -Encoding utf8
+
+      - name: Build (x86/x64) using msys2
+        if: ${{ matrix.arch != 'arm64' }}
+        shell: msys2 {0}
+        run: |
+          set -e
+          if [ "${{ matrix.arch }}" = "x86" ]; then
+            export PATH="/mingw32/bin:$PATH"
+          else
+            export PATH="/mingw64/bin:$PATH"
+          fi
+          rm -rf dist
+          mkdir -p dist
+          windres icon.rc -O coff -o icon.o
+          g++ -std=c++17 -O2 -s -static -static-libgcc -static-libstdc++ -municode delafterreboot.cpp icon.o -o dist/delafterreboot.exe -ladvapi32 -lshell32 -luser32
+          
+      - name: Build (arm64) using llvm-mingw
+        if: ${{ matrix.arch == 'arm64' }}
+        shell: pwsh
+        run: |
+          rm -Force -Recurse dist -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Path dist -Force | Out-Null
+          aarch64-w64-mingw32-windres icon.rc -O coff -o icon.o
+          aarch64-w64-mingw32-clang++ -std=c++17 -O2 -s -static -static-libgcc -static-libstdc++ -municode delafterreboot.cpp icon.o -o dist/delafterreboot.exe -ladvapi32 -lshell32 -luser32
+
 
       - name: Prepare Installer Directory
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Path installer -Force
+          New-Item -ItemType Directory -Path installer -Force | Out-Null
           Move-Item -Path "dist/delafterreboot.exe" -Destination "installer/delafterreboot.exe" -Force
 
-      # WiX is pre-installed on windows-latest, no need to install it.
-      - name: Build MSI Package
+      - name: Install WiX Toolset
+        shell: pwsh
+        run: choco install wixtoolset --no-progress -y
+
+      - name: Build MSI
         shell: pwsh
         run: |
-          $arch = '${{ matrix.arch }}'
-          Write-Host "Building MSI for architecture: $arch"
-          
-          # We run from repo root. Passing full relative path to EXE via variable.
-          candle installer\Product-$arch.wxs -ext WixUIExtension -dDelExePath="installer\delafterreboot.exe" -out installer\
-          light installer\Product-$arch.wixobj -ext WixUIExtension -o installer\DelAfterReboot-$arch.msi -b installer
-      
+          $wixPath = "C:\Program Files (x86)\WiX Toolset v3.14\bin"
+          if (-not (Test-Path $wixPath)) {
+            $wixPath = "C:\Program Files (x86)\WiX Toolset v3.11\bin"
+          }
+          $arch = "${{ matrix.arch }}"
+          Write-Host "Using WiX path: $wixPath"
+          & "$wixPath\candle.exe" "installer\Product-$arch.wxs" -ext WixUIExtension -dDelExePath="installer\delafterreboot.exe" -out "installer\$arch.wixobj"
+          & "$wixPath\light.exe" "installer\$arch.wixobj" -ext WixUIExtension -o "installer\DelAfterReboot-$arch.msi" -b installer
+
       - name: Attest MSI provenance
         if: >
           (github.event_name == 'workflow_dispatch' && github.event.inputs.release == 'yes') ||
@@ -77,76 +155,23 @@ jobs:
         uses: actions/attest-build-provenance@v1
         with:
           subject-path: installer/DelAfterReboot-${{ matrix.arch }}.msi
-          
+
       - name: Upload MSI Artifact
         uses: actions/upload-artifact@v4
         with:
           name: DelAfterReboot-msi-${{ matrix.arch }}
           path: installer/DelAfterReboot-${{ matrix.arch }}.msi
 
-  build-arm64:
-    runs-on: windows-11-arm
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Python ARM64
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          architecture: "arm64"
-
-      - name: Install Dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install pyinstaller
-
-      - name: Build EXE with PyInstaller
-        shell: pwsh
-        run: |
-          pyinstaller --onefile --console --icon=icon.ico delafterreboot.py --name delafterreboot.exe
-
-      - name: Prepare Installer Directory
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Path installer -Force
-          Move-Item -Path "dist/delafterreboot.exe" -Destination "installer/delafterreboot.exe" -Force
-
-      - name: Install WiX Toolset
-        run: choco install wixtoolset --no-progress -y
-
-      - name: Build MSI for ARM64
-        shell: pwsh
-        run: |
-          # Using absolute path for ARM64 runner as requested
-          $wixPath = "C:\Program Files (x86)\WiX Toolset v3.14\bin"
-          
-          Write-Host "Building MSI for ARM64 using path: $wixPath"
-          
-          & "$wixPath\candle.exe" installer\Product-arm64.wxs -ext WixUIExtension -dDelExePath="installer\delafterreboot.exe" -out installer\
-          & "$wixPath\light.exe" installer\Product-arm64.wixobj -ext WixUIExtension -o installer\DelAfterReboot-arm64.msi -b installer
-     
-      - name: Attest MSI provenance (ARM64)
-        if: >
-          (github.event_name == 'workflow_dispatch' && github.event.inputs.release == 'yes') ||
-          (github.event_name == 'push' && contains(github.event.head_commit.message, 'Release'))
-        uses: actions/attest-build-provenance@v1
-        with:
-          subject-path: installer/DelAfterReboot-arm64.msi
-          
-      - name: Upload MSI Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: DelAfterReboot-msi-arm64
-          path: installer/DelAfterReboot-arm64.msi
-
-  release:
+  release_and_notify:
+    name: Release and Notify
     runs-on: ubuntu-latest
-    needs: [build-x86-x64, build-arm64]
+    needs: build
     if: >
       (github.event_name == 'workflow_dispatch' && github.event.inputs.release == 'yes') ||
       (github.event_name == 'push' && contains(github.event.head_commit.message, 'Release'))
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Download all MSI artifacts
         uses: actions/download-artifact@v4
@@ -181,37 +206,15 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.PUBLISH_TOKEN }}
 
-  notify:
-    runs-on: ubuntu-latest
-    needs: [build-x86-x64, build-arm64]
-    if: always()
-    steps:
-      - name: Build Notification Message
-        id: build_msg
-        run: |
-          WORKFLOW_NAME="${{ github.workflow }}"
-          REPO="${{ github.repository }}"
-          STATUS="${{ needs.build-x86-x64.result }}-${{ needs.build-arm64.result }}"
-          URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-
-          if [[ "$STATUS" == "success-success" ]]; then
-            MESSAGE=$'✅ Workflow *'"${WORKFLOW_NAME}"'* completed successfully.\nRepository: '"${REPO}"'\n[View Workflow]('"${URL}"')'
-          else
-            MESSAGE=$'❌ Workflow *'"${WORKFLOW_NAME}"'* finished with status: *'"${STATUS}"'*\nRepository: '"${REPO}"'\n[View Workflow]('"${URL}"')'
-          fi
-
-          {
-            echo "message<<EOF"
-            echo "$MESSAGE"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
-
       - name: Send Telegram Notification
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
-          MESSAGE: ${{ steps.build_msg.outputs.message }}
         run: |
+          STATUS="success"
+          REPO="${{ github.repository }}"
+          URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          MESSAGE="✅ Release v${{ env.VERSION }} published.\nRepository: ${REPO}\n[View workflow](${URL})"
           curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
             -d chat_id="${TELEGRAM_CHAT}" \
             --data-urlencode "text=${MESSAGE}" \
