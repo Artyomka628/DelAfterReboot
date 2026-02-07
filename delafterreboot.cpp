@@ -35,6 +35,9 @@ static std::wstring widen(const char *s) {
     return out;
 }
 
+// forward declaration to allow using PrintLine in PrintVersion/PrintHelp
+void PrintLine(const std::wstring &text);
+
 static void PrintVersion() {
     PrintLine(L"Version: " + widen(APP_VERSION));
     PrintLine(L"Commit:  " + widen(GIT_COMMIT_HASH));
@@ -98,7 +101,7 @@ std::wstring GetModulePath() {
         return L"";
     }
     if (size >= path.size()) {
-        path.resize(size);
+        path.resize(size + MAX_PATH);
         size = GetModuleFileNameW(nullptr, path.data(), static_cast<DWORD>(path.size()));
         if (size == 0) {
             return L"";
@@ -286,11 +289,11 @@ void WritePendingDelete(const std::vector<std::wstring> &paths, bool show_progre
         DWORD full_len = GetFullPathNameW(path.c_str(), 0, nullptr, nullptr);
         std::wstring abs_path;
         if (full_len > 0) {
-            abs_path.resize(full_len);
-            DWORD actual = GetFullPathNameW(path.c_str(), full_len, abs_path.data(), nullptr);
-            if (actual > 0 && actual < abs_path.size()) {
+            abs_path.resize(full_len + 1);
+            DWORD actual = GetFullPathNameW(path.c_str(), static_cast<DWORD>(abs_path.size()), abs_path.data(), nullptr);
+            if (actual > 0) {
                 abs_path.resize(actual);
-            } else if (actual == 0) {
+            } else {
                 abs_path = path;
             }
         } else {
@@ -473,21 +476,3 @@ int wmain(int argc, wchar_t *argv[]) {
         std::chrono::steady_clock::now() - start_time);
 
     PrintLine(L"\n=================");
-    {
-        std::wstringstream line;
-        line << L"Marked: " << paths.size() << L" files";
-        PrintLine(line.str());
-    }
-    {
-        std::wstringstream line;
-        line << L"Elapsed Time: " << std::fixed << std::setprecision(2) << elapsed.count() << L" seconds";
-        PrintLine(line.str());
-    }
-    PrintLine(L"=================");
-
-    if (g_use_debug) {
-        ShowLog(args);
-    }
-
-    return 0;
-}
