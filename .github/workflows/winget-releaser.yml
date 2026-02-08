@@ -1,0 +1,210 @@
+name: winget-releaser
+
+on:
+  workflow_dispatch:
+    inputs:
+      winget_fork:
+        description: 'Target fork (owner/repo). Example: Artyomka628/winget-pkgs'
+        required: true
+        default: 'Artyomka628/winget-pkgs'
+      dry_run:
+        description: 'If true: validate only, do not push or create PR'
+        required: true
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    name: Prepare
+    runs-on: ubuntu-latest
+    outputs:
+      new_ver: ${{ steps.package_manifests.outputs.new_ver }}
+      new_tag: ${{ steps.package_manifests.outputs.new_tag }}
+      branch: ${{ steps.package_manifests.outputs.branch }}
+      fork_owner: ${{ steps.ensure_fork.outputs.fork_owner }}
+      fork_repo: ${{ steps.ensure_fork.outputs.fork_repo }}
+    steps:
+      - name: Checkout source repo (with tags)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Ensure Python deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install PyYAML packaging
+
+      - name: Ensure fork exists (create if missing) and set outputs
+        id: ensure_fork
+        env:
+          FORK: ${{ github.event.inputs.winget_fork }}
+          TOKEN: ${{ secrets.WINGET_PUSH_TOKEN }}
+          UPSTREAM_OWNER: microsoft
+          UPSTREAM_REPO: winget-pkgs
+        run: |
+          set -e
+          owner="${FORK%%/*}"
+          repo="${FORK##*/}"
+          echo "owner=$owner repo=$repo"
+          status=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: token ${TOKEN}" "https://api.github.com/repos/${owner}/${repo}" || true)
+          if [ "$status" -eq 200 ]; then
+            echo "Fork exists: ${owner}/${repo}"
+          else
+            echo "Creating fork ${owner}/${repo} from ${UPSTREAM_OWNER}/${UPSTREAM_REPO}..."
+            curl -s -X POST -H "Authorization: token ${TOKEN}" "https://api.github.com/repos/${UPSTREAM_OWNER}/${UPSTREAM_REPO}/forks" > /dev/null || true
+            # wait for fork availability
+            for i in $(seq 1 30); do
+              sleep 2
+              s=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: token ${TOKEN}" "https://api.github.com/repos/${owner}/${repo}" || true)
+              if [ "$s" -eq 200 ]; then
+                echo "Fork ready."
+                break
+              fi
+              echo -n "."
+            done
+            s=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: token ${TOKEN}" "https://api.github.com/repos/${owner}/${repo}" || true)
+            if [ "$s" -ne 200 ]; then
+              echo "Fork creation timed out or failed (http $s)"
+              exit 1
+            fi
+          fi
+          echo "fork_owner=$owner" >> $GITHUB_OUTPUT
+          echo "fork_repo=$repo" >> $GITHUB_OUTPUT
+
+      - name: Checkout fork (to path fork)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.inputs.winget_fork }}
+          token: ${{ secrets.WINGET_PUSH_TOKEN }}
+          path: fork
+          fetch-depth: 0
+
+      - name: Run script 01_prepare_copy.py
+        run: |
+          python scripts/01_prepare_copy.py --manifests-path fork/manifests/d/DrygvalArtyom/DelAfterReboot
+
+      - name: Run script 02_update_manifest.py
+        run: |
+          TAG=$(git describe --tags --abbrev=0)
+          python scripts/02_update_manifest.py --manifests-path fork/manifests/d/DrygvalArtyom/DelAfterReboot --tag "$TAG"
+
+      - name: Run script 03_compute_sha.py
+        run: |
+          TAG=$(git describe --tags --abbrev=0)
+          python scripts/03_compute_sha.py --manifests-path fork/manifests/d/DrygvalArtyom/DelAfterReboot --tag "$TAG"
+
+      - name: Run script 04_update_product_code.py
+        run: |
+          python scripts/04_update_product_code.py --manifests-path fork/manifests/d/DrygvalArtyom/DelAfterReboot --wxs-path installer
+
+      - name: Run script 05_ensure_schema.py
+        run: |
+          TAG=$(git describe --tags --abbrev=0)
+          NEW_TAG="$TAG"
+          NEW_VER="${NEW_TAG#v}"
+          python scripts/05_ensure_schema.py --manifests-path fork/manifests/d/DrygvalArtyom/DelAfterReboot/${NEW_VER}
+
+      - name: Determine version
+        id: package_manifests
+        run: |
+          TAG=$(git describe --tags --abbrev=0)
+          NEW_TAG="$TAG"
+          NEW_VER="${NEW_TAG#v}"
+          echo "new_tag=$NEW_TAG" >> "$GITHUB_OUTPUT"
+          echo "new_ver=$NEW_VER" >> "$GITHUB_OUTPUT"
+          echo "branch=winget-update-$NEW_VER" >> "$GITHUB_OUTPUT"
+
+      - name: Upload manifests artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: manifests
+          path: fork/manifests/d/DrygvalArtyom/DelAfterReboot/${{ steps.package_manifests.outputs.new_ver }}
+
+      - name: Commit & push branch to fork (only if not dry_run)
+        if: ${{ github.event.inputs.dry_run == 'false' }}
+        env:
+          TOKEN: ${{ secrets.WINGET_PUSH_TOKEN }}
+          FORK: ${{ github.event.inputs.winget_fork }}
+        run: |
+          set -e
+          NEW_TAG=${{ steps.package_manifests.outputs.new_tag }}
+          NEW_VER=${{ steps.package_manifests.outputs.new_ver }}
+          BRANCH=${{ steps.package_manifests.outputs.branch }}
+          git -C fork config user.name "${{ github.actor }}"
+          git -C fork config user.email "${{ github.actor }}@users.noreply.github.com"
+          git -C fork checkout -b "$BRANCH"
+          git -C fork add -A
+          git -C fork commit -m "Update DelAfterReboot to ${NEW_VER}" || echo "No changes to commit"
+          git -C fork push "https://${TOKEN}@github.com/${FORK}.git" "$BRANCH"
+
+  validate:
+    name: Validate
+    runs-on: windows-latest
+    needs: prepare
+    steps:
+      - name: Download manifests artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: manifests
+          path: ./manifests
+
+      - name: Show artifact tree (debug)
+        shell: bash
+        run: |
+          echo "Files:"
+          ls -la
+
+      - name: Winget validate
+        shell: pwsh
+        run: |
+          $ver = '${{ needs.prepare.outputs.new_ver }}'
+          $base = Resolve-Path ./manifests
+          
+          # Создаём папку с версией, если её нет
+          $path = Join-Path $base $ver
+          if (-Not (Test-Path $path)) {
+              New-Item -ItemType Directory -Path $path | Out-Null
+              # Копируем все yaml файлы внутрь
+              Get-ChildItem $base -Filter *.yaml | Copy-Item -Destination $path
+          }
+          
+          Write-Host "Path to validate: $path"
+          winget validate $path
+          
+  create-pr:
+    name: Create PR
+    runs-on: ubuntu-latest
+    needs: [validate, prepare]
+    if: ${{ github.event.inputs.dry_run == 'false' }}
+    steps:
+      - name: Create PR to upstream microsoft/winget-pkgs
+        env:
+          TOKEN: ${{ secrets.WINGET_PUSH_TOKEN }}
+          FORK: ${{ github.event.inputs.winget_fork }}
+          NEW_TAG: ${{ needs.prepare.outputs.new_tag }}
+          NEW_VER: ${{ needs.prepare.outputs.new_ver }}
+        run: |
+          owner="${FORK%%/*}"
+          branch="winget-update-${NEW_VER}"
+          head="${owner}:${branch}"
+          echo "Creating PR with head=${head} base=master"
+          body_json=$(jq -n \
+            --arg title "Update DelAfterReboot to ${NEW_VER}" \
+            --arg head "$head" \
+            --arg body "Automated update from repo ${GITHUB_REPOSITORY} tag ${NEW_TAG}" \
+            '{title:$title, head:$head, base:"master", body:$body}'
+          )
+          curl -s -X POST \
+            -H "Authorization: token ${TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -d "$body_json" \
+            https://api.github.com/repos/microsoft/winget-pkgs/pulls || true
+
+      - name: Done
+        run: echo "PR step finished"
