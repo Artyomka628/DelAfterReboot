@@ -35,7 +35,6 @@ static std::wstring widen(const char *s) {
     return out;
 }
 
-// forward declaration
 void PrintLine(const std::wstring &text);
 
 static void PrintVersion() {
@@ -285,13 +284,11 @@ void WritePendingDelete(const std::vector<std::wstring> &paths, bool show_progre
     auto start_time = std::chrono::steady_clock::now();
     const int bar_length = 25;
 
-    // НЕ печатаем пустую строку перед прогрессом — чтобы отступы были ровные
     auto last_draw = start_time;
     size_t index = 0;
     for (const auto &path : paths) {
         ++index;
 
-        // путь у нас уже абсолютный; не вызывать GetFullPathNameW на каждый файл
         std::wstring nt_path = L"\\\\??\\" + path;
         entries.push_back(nt_path);
         entries.push_back(L"");
@@ -320,7 +317,7 @@ void WritePendingDelete(const std::vector<std::wstring> &paths, bool show_progre
     }
 
     if (show_progress) {
-        std::wcout << L"\n" << std::flush; // ровно 1 пустая строка после прогресса
+        std::wcout << L"\n" << std::flush;
     }
 
     size_t total_chars = 1;
@@ -364,7 +361,7 @@ void ClearPendingDelete() {
 
     RegCloseKey(reg_key);
 }
-} // anonymous namespace
+}
 
 int wmain(int argc, wchar_t *argv[]) {
     std::vector<std::wstring> args;
@@ -405,9 +402,8 @@ int wmain(int argc, wchar_t *argv[]) {
     }
 
     if (flags.empty()) {
-        // делаем одинаково с --help
         PrintHelp();
-        return 2;
+        return 0;
     }
 
     if (std::find(flags.begin(), flags.end(), L"--cancel") != flags.end()) {
