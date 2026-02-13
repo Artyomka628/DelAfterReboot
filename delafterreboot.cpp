@@ -54,6 +54,7 @@ static void PrintHelp() {
     PrintLine(L"  --debug     Debug output using MessageBox");
     PrintLine(L"  --cancel    Clear PendingFileRenameOperations");
     PrintLine(L"  --uac       Request elevation via UAC");
+    PrintLine(L"  --nodelay   Skip 1 second delay before exit");
     PrintLine(L"");
     PrintVersion();
 }
@@ -387,6 +388,7 @@ int wmain(int argc, wchar_t *argv[]) {
 
     bool force_uac = std::find(flags.begin(), flags.end(), L"--uac") != flags.end();
     bool debug_flag = std::find(flags.begin(), flags.end(), L"--debug") != flags.end();
+    bool no_delay = std::find(flags.begin(), flags.end(), L"--nodelay") != flags.end();
 
     if (debug_flag) {
         g_use_debug = true;
@@ -416,12 +418,14 @@ int wmain(int argc, wchar_t *argv[]) {
             if (g_use_debug) {
                 ShowLog(args);
             }
+            if (!no_delay) Sleep(1000);
             return 3;
         }
 
         if (g_use_debug) {
             ShowLog(args);
         }
+        if (!no_delay) Sleep(1000);
         return 0;
     }
 
@@ -435,6 +439,7 @@ int wmain(int argc, wchar_t *argv[]) {
 
     if (folder.empty()) {
         PrintLine(L"Error: no folder specified.");
+        if (!no_delay) Sleep(1000);
         return 2;
     }
 
@@ -444,6 +449,7 @@ int wmain(int argc, wchar_t *argv[]) {
         if (g_use_debug) {
             ShowLog(args);
         }
+        if (!no_delay) Sleep(1000);
         return 2;
     }
 
@@ -461,6 +467,7 @@ int wmain(int argc, wchar_t *argv[]) {
         if (g_use_debug) {
             ShowLog(args);
         }
+        if (!no_delay) Sleep(1000);
         return 3;
     }
 
@@ -485,5 +492,6 @@ int wmain(int argc, wchar_t *argv[]) {
         ShowLog(args);
     }
 
+    if (!no_delay) Sleep(1000);
     return 0;
 }
