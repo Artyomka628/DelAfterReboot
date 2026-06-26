@@ -1,3 +1,7 @@
+> [!CAUTION]
+> Only download DelAfterReboot from winget or Github.
+> Others sources may contain viruses!
+
 # DelAfterReboot
 
 A simple program that forcibly deletes folders recursively before the system boots.
