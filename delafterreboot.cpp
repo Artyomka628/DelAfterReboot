@@ -253,6 +253,9 @@ std::vector<std::wstring> CollectPathsBottomUp(const std::wstring &root_path) {
     return all;
 }
 
+static constexpr size_t kMaxPendingDeleteEntries = 32768;
+static constexpr DWORD kMaxPendingDeleteValueSize = 1024 * 1024; // 1 MB
+
 bool QueryMultiString(HKEY key, const std::wstring &value_name, std::vector<std::wstring> &values) {
     DWORD type = 0;
     DWORD data_size = 0;
@@ -290,7 +293,25 @@ void WritePendingDelete(const std::vector<std::wstring> &paths, bool show_progre
     }
 
     std::vector<std::wstring> entries;
-    QueryMultiString(reg_key, L"PendingFileRenameOperations", entries);
+    if (!QueryMultiString(reg_key, L"PendingFileRenameOperations", entries)) {
+        RegCloseKey(reg_key);
+        throw std::runtime_error("Failed to read existing PendingFileRenameOperations");
+    }
+
+    size_t current_chars = 1;
+    for (const auto &entry : entries) {
+        current_chars += entry.size() + 1;
+    }
+
+    if (entries.size() > kMaxPendingDeleteEntries) {
+        RegCloseKey(reg_key);
+        throw std::runtime_error("Existing PendingFileRenameOperations is too large to update");
+    }
+
+    if (current_chars * sizeof(wchar_t) > kMaxPendingDeleteValueSize) {
+        RegCloseKey(reg_key);
+        throw std::runtime_error("Existing PendingFileRenameOperations value is too large to update");
+    }
 
     size_t total = paths.size();
     if (total == 0) {
@@ -306,8 +327,16 @@ void WritePendingDelete(const std::vector<std::wstring> &paths, bool show_progre
         ++index;
 
         std::wstring nt_path = L"\\\\??\\" + path;
+        size_t additional_chars = nt_path.size() + 2;
+        if (entries.size() + 2 > kMaxPendingDeleteEntries ||
+            (current_chars + additional_chars) * sizeof(wchar_t) > kMaxPendingDeleteValueSize) {
+            RegCloseKey(reg_key);
+            throw std::runtime_error("Adding this folder would exceed the PendingFileRenameOperations limits");
+        }
+
         entries.push_back(nt_path);
         entries.push_back(L"");
+        current_chars += additional_chars;
 
         auto now = std::chrono::steady_clock::now();
         if (show_progress &&
@@ -336,13 +365,8 @@ void WritePendingDelete(const std::vector<std::wstring> &paths, bool show_progre
         std::wcout << L"\n" << std::flush;
     }
 
-    size_t total_chars = 1;
-    for (const auto &entry : entries) {
-        total_chars += entry.size() + 1;
-    }
-
     std::vector<wchar_t> buffer;
-    buffer.reserve(total_chars);
+    buffer.reserve(current_chars);
     for (const auto &entry : entries) {
         buffer.insert(buffer.end(), entry.begin(), entry.end());
         buffer.push_back(L'\0');
