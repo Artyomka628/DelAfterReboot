@@ -110,6 +110,21 @@ std::wstring GetModulePath() {
     return path;
 }
 
+std::wstring GetAbsolutePath(const std::wstring &path) {
+    DWORD size = GetFullPathNameW(path.c_str(), 0, nullptr, nullptr);
+    if (size == 0) {
+        return L"";
+    }
+
+    std::wstring abs_path(size, L'\0');
+    DWORD result = GetFullPathNameW(path.c_str(), size, abs_path.data(), nullptr);
+    if (result == 0 || result >= size) {
+        return L"";
+    }
+    abs_path.resize(result);
+    return abs_path;
+}
+
 bool IsAdmin() {
     BOOL is_admin = FALSE;
     is_admin = IsUserAnAdmin();
@@ -334,9 +349,15 @@ void WritePendingDelete(const std::vector<std::wstring> &paths, bool show_progre
     }
     buffer.push_back(L'\0');
 
-    RegSetValueExW(reg_key, L"PendingFileRenameOperations", 0, REG_MULTI_SZ,
+    LSTATUS status = RegSetValueExW(reg_key, L"PendingFileRenameOperations", 0, REG_MULTI_SZ,
                    reinterpret_cast<const BYTE *>(buffer.data()),
                    static_cast<DWORD>(buffer.size() * sizeof(wchar_t)));
+    if (status != ERROR_SUCCESS) {
+        RegCloseKey(reg_key);
+        std::stringstream error;
+        error << "Failed to write PendingFileRenameOperations: " << status;
+        throw std::runtime_error(error.str());
+    }
 
     RegCloseKey(reg_key);
 }
@@ -439,6 +460,16 @@ int wmain(int argc, wchar_t *argv[]) {
 
     if (folder.empty()) {
         PrintLine(L"Error: no folder specified.");
+        if (!no_delay) Sleep(1000);
+        return 2;
+    }
+
+    folder = GetAbsolutePath(folder);
+    if (folder.empty()) {
+        PrintLine(L"Error: failed to resolve specified path.");
+        if (g_use_debug) {
+            ShowLog(args);
+        }
         if (!no_delay) Sleep(1000);
         return 2;
     }
