@@ -116,9 +116,9 @@ std::wstring GetAbsolutePath(const std::wstring &path) {
         return L"";
     }
 
-    std::wstring abs_path(size, L'\0');
-    DWORD result = GetFullPathNameW(path.c_str(), size, abs_path.data(), nullptr);
-    if (result == 0 || result >= size) {
+    std::wstring abs_path(size + 1, L'\0');
+    DWORD result = GetFullPathNameW(path.c_str(), size + 1, abs_path.data(), nullptr);
+    if (result == 0 || result >= size + 1) {
         return L"";
     }
     abs_path.resize(result);
@@ -147,14 +147,14 @@ bool EnsureAdmin(const std::vector<std::wstring> &args, bool force_uac) {
 
     std::wstring params;
     bool first = true;
-    for (const auto &arg : args) {
-        if (arg == L"--uac") {
+    for (auto it = args.begin() + 1; it != args.end(); ++it) {
+        if (*it == L"--uac") {
             continue;
         }
         if (!first) {
             params += L" ";
         }
-        params += L"\"" + arg + L"\"";
+        params += L"\"" + *it + L"\"";
         first = false;
     }
 
@@ -253,9 +253,6 @@ std::vector<std::wstring> CollectPathsBottomUp(const std::wstring &root_path) {
     return all;
 }
 
-static constexpr size_t kMaxPendingDeleteEntries = 32768;
-static constexpr DWORD kMaxPendingDeleteValueSize = 1024 * 1024; // 1 MB
-
 bool QueryMultiString(HKEY key, const std::wstring &value_name, std::vector<std::wstring> &values) {
     DWORD type = 0;
     DWORD data_size = 0;
@@ -284,9 +281,18 @@ bool QueryMultiString(HKEY key, const std::wstring &value_name, std::vector<std:
     return true;
 }
 
+REGSAM GetPendingDeleteAccess() {
+    BOOL is_wow64 = FALSE;
+    REGSAM access = KEY_READ | KEY_WRITE;
+    if (IsWow64Process(GetCurrentProcess(), &is_wow64) && is_wow64) {
+        access |= KEY_WOW64_64KEY;
+    }
+    return access;
+}
+
 void WritePendingDelete(const std::vector<std::wstring> &paths, bool show_progress) {
     const wchar_t *key_path = L"SYSTEM\\CurrentControlSet\\Control\\Session Manager";
-    REGSAM access = KEY_SET_VALUE | KEY_QUERY_VALUE | KEY_WOW64_64KEY;
+    REGSAM access = GetPendingDeleteAccess();
     HKEY reg_key = nullptr;
     if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, key_path, 0, access, &reg_key) != ERROR_SUCCESS) {
         throw std::runtime_error("Failed to open registry key");
@@ -296,21 +302,6 @@ void WritePendingDelete(const std::vector<std::wstring> &paths, bool show_progre
     if (!QueryMultiString(reg_key, L"PendingFileRenameOperations", entries)) {
         RegCloseKey(reg_key);
         throw std::runtime_error("Failed to read existing PendingFileRenameOperations");
-    }
-
-    size_t current_chars = 1;
-    for (const auto &entry : entries) {
-        current_chars += entry.size() + 1;
-    }
-
-    if (entries.size() > kMaxPendingDeleteEntries) {
-        RegCloseKey(reg_key);
-        throw std::runtime_error("Existing PendingFileRenameOperations is too large to update");
-    }
-
-    if (current_chars * sizeof(wchar_t) > kMaxPendingDeleteValueSize) {
-        RegCloseKey(reg_key);
-        throw std::runtime_error("Existing PendingFileRenameOperations value is too large to update");
     }
 
     size_t total = paths.size();
@@ -327,16 +318,8 @@ void WritePendingDelete(const std::vector<std::wstring> &paths, bool show_progre
         ++index;
 
         std::wstring nt_path = L"\\\\??\\" + path;
-        size_t additional_chars = nt_path.size() + 2;
-        if (entries.size() + 2 > kMaxPendingDeleteEntries ||
-            (current_chars + additional_chars) * sizeof(wchar_t) > kMaxPendingDeleteValueSize) {
-            RegCloseKey(reg_key);
-            throw std::runtime_error("Adding this folder would exceed the PendingFileRenameOperations limits");
-        }
-
         entries.push_back(nt_path);
         entries.push_back(L"");
-        current_chars += additional_chars;
 
         auto now = std::chrono::steady_clock::now();
         if (show_progress &&
@@ -365,8 +348,13 @@ void WritePendingDelete(const std::vector<std::wstring> &paths, bool show_progre
         std::wcout << L"\n" << std::flush;
     }
 
+    size_t total_chars = 1;
+    for (const auto &entry : entries) {
+        total_chars += entry.size() + 1;
+    }
+
     std::vector<wchar_t> buffer;
-    buffer.reserve(current_chars);
+    buffer.reserve(total_chars);
     for (const auto &entry : entries) {
         buffer.insert(buffer.end(), entry.begin(), entry.end());
         buffer.push_back(L'\0');
