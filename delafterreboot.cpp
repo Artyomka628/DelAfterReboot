@@ -190,6 +190,23 @@ std::wstring FormatSeconds(double seconds) {
     return out.str();
 }
 
+void RemoveReparsePointImmediately(const std::wstring &path, DWORD attributes) {
+    BOOL removed = (attributes & FILE_ATTRIBUTE_DIRECTORY)
+        ? RemoveDirectoryW(path.c_str())
+        : DeleteFileW(path.c_str());
+
+    if (!removed) {
+        DWORD error = GetLastError();
+        std::wstringstream message;
+        message << L"Failed to remove reparse point safely (Windows error "
+                << error << L"): " << path;
+        PrintLine(message.str());
+        throw std::runtime_error(
+            "A reparse point could not be removed safely and was not scheduled for reboot deletion."
+        );
+    }
+}
+
 void CollectPathsRecursive(const std::wstring &root_path,
                            std::vector<std::wstring> &files,
                            std::vector<std::wstring> &dirs) {
@@ -225,12 +242,12 @@ void CollectPathsRecursive(const std::wstring &root_path,
         }
         full_path += name;
 
-        if (find_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
-            if (find_data.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) {
-                local_dirs.push_back(full_path);
-                continue;
-            }
+        if (find_data.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) {
+            RemoveReparsePointImmediately(full_path, find_data.dwFileAttributes);
+            continue;
+        }
 
+        if (find_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
             CollectPathsRecursive(full_path, files, dirs);
             local_dirs.push_back(full_path);
         } else {
@@ -251,13 +268,13 @@ std::vector<std::wstring> CollectPathsBottomUp(const std::wstring &root_path) {
 
     DWORD root_attrs = GetFileAttributesW(root_path.c_str());
     if (root_attrs != INVALID_FILE_ATTRIBUTES &&
-        (root_attrs & FILE_ATTRIBUTE_DIRECTORY) &&
         (root_attrs & FILE_ATTRIBUTE_REPARSE_POINT)) {
-        dirs.push_back(root_path);
-    } else {
-        CollectPathsRecursive(root_path, files, dirs);
-        dirs.push_back(root_path);
+        RemoveReparsePointImmediately(root_path, root_attrs);
+        return all;
     }
+
+    CollectPathsRecursive(root_path, files, dirs);
+    dirs.push_back(root_path);
 
     std::vector<std::wstring> all;
     all.reserve(files.size() + dirs.size());
@@ -526,11 +543,13 @@ int wmain(int argc, wchar_t *argv[]) {
     std::vector<std::wstring> paths;
     try {
         paths = CollectPathsBottomUp(folder);
-        bool show_progress = !g_use_debug;
-        WritePendingDelete(paths, show_progress);
+        if (!paths.empty()) {
+            bool show_progress = !g_use_debug;
+            WritePendingDelete(paths, show_progress);
+        }
     } catch (const std::exception &ex) {
         std::wstringstream error;
-        error << L"Error while writing to registry: " << ex.what();
+        error << L"Error while preparing deletion: " << ex.what();
         PrintLine(error.str());
         if (g_use_debug) {
             ShowLog(args);
