@@ -270,7 +270,7 @@ std::vector<std::wstring> CollectPathsBottomUp(const std::wstring &root_path) {
     if (root_attrs != INVALID_FILE_ATTRIBUTES &&
         (root_attrs & FILE_ATTRIBUTE_REPARSE_POINT)) {
         RemoveReparsePointImmediately(root_path, root_attrs);
-        return all;
+        return {};
     }
 
     CollectPathsRecursive(root_path, files, dirs);
