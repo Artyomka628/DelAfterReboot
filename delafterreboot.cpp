@@ -326,7 +326,7 @@ void WritePendingDelete(const std::vector<std::wstring> &paths, bool show_progre
     for (const auto &path : paths) {
         ++index;
 
-        std::wstring nt_path = L"\\\\??\\" + path;
+        std::wstring nt_path = L"\\??\\" + path;
         size_t additional_chars = nt_path.size() + 2;
         if (entries.size() + 2 > kMaxPendingDeleteEntries ||
             (current_chars + additional_chars) * sizeof(wchar_t) > kMaxPendingDeleteValueSize) {
