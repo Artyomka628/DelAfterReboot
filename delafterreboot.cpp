@@ -226,6 +226,11 @@ void CollectPathsRecursive(const std::wstring &root_path,
         full_path += name;
 
         if (find_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+            if (find_data.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) {
+                local_dirs.push_back(full_path);
+                continue;
+            }
+
             CollectPathsRecursive(full_path, files, dirs);
             local_dirs.push_back(full_path);
         } else {
@@ -243,8 +248,16 @@ void CollectPathsRecursive(const std::wstring &root_path,
 std::vector<std::wstring> CollectPathsBottomUp(const std::wstring &root_path) {
     std::vector<std::wstring> files;
     std::vector<std::wstring> dirs;
-    CollectPathsRecursive(root_path, files, dirs);
-    dirs.push_back(root_path);
+
+    DWORD root_attrs = GetFileAttributesW(root_path.c_str());
+    if (root_attrs != INVALID_FILE_ATTRIBUTES &&
+        (root_attrs & FILE_ATTRIBUTE_DIRECTORY) &&
+        (root_attrs & FILE_ATTRIBUTE_REPARSE_POINT)) {
+        dirs.push_back(root_path);
+    } else {
+        CollectPathsRecursive(root_path, files, dirs);
+        dirs.push_back(root_path);
+    }
 
     std::vector<std::wstring> all;
     all.reserve(files.size() + dirs.size());
